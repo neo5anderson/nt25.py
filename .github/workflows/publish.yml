@@ -1,0 +1,29 @@
+name: Publish
+
+on:
+  push:
+    tags: ["*"]
+
+jobs:
+  pypi-publish:
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+
+    environment:
+      name: publish
+      url: https://pypi.org/p/ntpy
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup
+        uses: astral-sh/setup-uv@v6
+
+      - name: Build
+        run: uv build
+
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1

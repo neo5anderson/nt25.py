@@ -1,0 +1,14 @@
+[project]
+name = "ntpy"
+version = "0.1.0"
+description = "Neo's Tools of Python"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = []
+
+[project.scripts]
+ntpy = "ntpy.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
