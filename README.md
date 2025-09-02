@@ -1,16 +1,32 @@
-# NT.py
+# nt25.py
 
-Neo's Tools of Python
+Neo's Tools of Python in 2025
 
-## plans
+## TODO
 
-- fio
-- calc
-- draw
+- [x] fio
+- [x] sqlite
+- [x] ex: EXIF tools with Magic
+- [x] mt: MapXYZ Transfer tool
+- [x] pgogs: Purge Gogs orphan files
+- [ ] mysql
+- [ ] redis
 
-## scripts from init
+## Usage
 
 ```sh
-uv init
-uv run ntpy
+# help of EXIF tools
+ex -h
+
+# help of MapXYZ
+mt -h
+
+# Purge Gogs orphan files
+./pgogs
 ```
+
+## have fun
+
+$$
+\sqrt{-1},2^{3},\sum,\pi
+$$

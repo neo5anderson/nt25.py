@@ -13,7 +13,7 @@ jobs:
 
     environment:
       name: publish
-      url: https://pypi.org/p/ntpy
+      url: https://pypi.org/p/nt25
 
     steps:
       - name: Checkout
