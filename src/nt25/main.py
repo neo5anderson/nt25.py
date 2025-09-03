@@ -1,4 +1,4 @@
-from ntpy import fio, calc, draw, DType, __version__
+from nt25 import fio, calc, draw, DType, __version__
 
 # import timeit
 # timeit.timeit('', number=100, globals=globals())

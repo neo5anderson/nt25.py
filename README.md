@@ -1,11 +1,12 @@
-# NT.py
+# nt25.py
 
-Neo's Tools of Python
+Neo's Tools of Python in 2025
 
 ## plans
 
 - [x] fio
 - [x] calc
+- [x] draw with 2d
 - [ ] draw with 3d
 
 ## scripts from init
