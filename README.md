@@ -4,9 +4,9 @@ Neo's Tools of Python
 
 ## plans
 
-- fio
-- calc
-- draw
+- [x] fio
+- [x] calc
+- [ ] draw with 3d
 
 ## scripts from init
 
@@ -15,9 +15,7 @@ uv init
 uv run ntpy
 ```
 
-## foo
-
-i eight some pi
+## fun
 
 $$
 \sqrt{-1},2^{3},\sum,\pi

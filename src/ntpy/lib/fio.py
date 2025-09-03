@@ -49,13 +49,13 @@ def _getCSV(file, width, startLine, startCol, encoding):
   return result
 
 
-def _getCSV2(file, encoding=None):
+def _getCSV2(file, encoding=None, colsInline=True):
   df = pd.read_csv(file, encoding=encoding)
 
   row = df.to_numpy()
-  col = row.T.tolist()
-  # row = row.tolist()
-  return col
+  r = row.T if colsInline else row
+
+  return r.tolist()
 
 
 def getCSV(file, width=2, startLine=1, startCol=0, encoding=None):
@@ -97,13 +97,13 @@ def saveCSV2(data, file, encoding=None, float_format=None, colsInline=True):
     df.to_csv(file, index=False, encoding=encoding, float_format=float_format)
 
 
-def getXlsx(file, sheet=0):
+def getXlsx(file, sheet=0, colsInLine=True):
   df = pd.read_excel(file, sheet_name=sheet)
 
   row = df.to_numpy()
-  col = row.T.tolist()
-  # row = row.tolist()
-  return col
+  r = row.T if colsInLine else row
+
+  return r.tolist()
 
 
 def saveXlsx(data, file, colsInline=True):
