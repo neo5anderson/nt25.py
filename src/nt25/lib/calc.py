@@ -88,7 +88,7 @@ def solveEq(eq, output=False, foo='solve'):
     if 'I' in sol:
       continue
 
-    func = _genFunc(foo, 'y, x1=0', sol)
+    func = _genFunc(foo, 'y, x1=0', sol.replace('y', 'y[0]'))
     s4e = re.sub(r'([-]?\d*\.\d+)', lambda m: str2e(m.group(0)), sol)
 
     if output:

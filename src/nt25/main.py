@@ -33,13 +33,18 @@ def main():
   bfunc = bar[0]['func']
 
   Y = range(1000, 2000, 200)
-  X = [bfunc(y) for y in Y]
+  X = [bfunc([y]) for y in Y]
 
   # [Neo] draw 2d with types
-  ref = {}
-  draw.d2d(X=h, Y=v, ref=ref)
+  ref = draw.d2d(X=h, Y=v)
   draw.d2d(type=DType.scatter, X=X, Y=Y, ref=ref, color='red', s=120)
-  draw.d2d(type=DType.func, Func=func, min=40, max=60, ref=ref, color='red')
+  draw.title(ref, "title", x='xlabel', y='ylabel')
+  draw.show()
+
+  draw.d2d(type=DType.func, Func=func, min=40, max=60, ref=ref, pos=121,
+           label='func', color='red')
+  draw.d2d(type=DType.func, Func=bfunc, min=0, max=4000, ref=ref, pos=122,
+           label='bfunc', labelLocation='upper right')
   draw.show()
 
   # [Neo] and 3d calcs
@@ -47,7 +52,7 @@ def main():
   bar = calc.solveEq(foo['eq'], output=True)
 
   if len(bar) > 0:
-    print('s> 750, 1.5 ~', bar[0]['func'](y=750, x1=1.5))
+    print('s> 750, 1.5 ~', bar[0]['func'](y=[750], x1=1.5))
 
 
 if __name__ == "__main__":

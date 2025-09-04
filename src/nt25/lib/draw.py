@@ -12,13 +12,37 @@ from matplotlib import pyplot as plot
 FONTS = ['PingFang SC', 'Microsoft YaHei', 'Arial']
 COLORS = ['blue', 'red', 'orange', 'black', 'pink']
 
+REFS = []
+
+
+class DType(Enum):
+  scatter = 1,
+  line = 2,
+  func = 3,
+
+
+def onClose(event):
+  global REFS
+
+  for r in REFS:
+    del r['figure']
+    del r['subplot']
+
+  REFS.clear()
+
 
 def _getPlot(ref, pos, font='Roboto') -> Axes:
+  global REFS
+
   if 'figure' not in ref:
-    ref['figure'] = plot.figure()
+    fig = plot.figure()
+    fig.canvas.mpl_connect('close_event', onClose)
+
     plot.rcParams['font.sans-serif'] = [font] + FONTS
-    # plot.rcParams['font.sans-serif'] = ['Arial']
     plot.rcParams['axes.unicode_minus'] = False
+
+    ref['figure'] = fig
+    REFS.append(ref)
 
   if 'subplot' not in ref:
     ref['subplot'] = {}
@@ -41,7 +65,27 @@ def _genList(refer: list, length, random=False):
   return r[:length]
 
 
-def _coord(ref, X, Y, color, pos, randomColor, method, *args, **kwargs):
+def _genParam(pIn, pDefault, count):
+  if pIn is None:
+    pIn = pDefault
+
+  if count == 1:
+    if isinstance(pIn, (list, tuple)):
+      pIn = pIn[0]
+
+  elif len(pIn) != count:
+    # print(f"bad len {len(pIn)} != {count}")
+    pIn = None
+
+  return pIn
+
+
+def _coord(ref, X, Y,  pos, label, color, randomColor, method,
+           *args, **kwargs):
+  if X is None or Y is None:
+    print("no X/Y to draw")
+    return
+
   Xa = np.array(X)
   Ya = np.array(Y)
 
@@ -58,45 +102,53 @@ def _coord(ref, X, Y, color, pos, randomColor, method, *args, **kwargs):
       X = X[0]
       Y = Y[0]
 
-  if color is None:
-    color = _genList(COLORS, count, random=randomColor)
+  pos = _genParam(pos, [111] * count, count)
+  label = _genParam(label, [111] * count, count)
+  color = _genParam(color, _genList(COLORS, count, random=randomColor), count)
 
-  if count == 1:
-    if isinstance(color, (list, tuple)):
-      color = color[0]
-  elif len(color) != count:
-    print(f"bad color.len {len(color)} != {count}")
+  if pos is None or label is None or color is None:
+    print("bad length")
     return
 
-  if pos is None:
-    pos = [111] * count
-
   if count == 1:
-    if isinstance(pos, (list, tuple)):
-      pos = pos[0]
-  elif len(pos) != count:
-    print(f"bad pos.len {len(pos)} != {count}")
-    return
+    p = _getPlot(ref, pos)
+    method(p, X, Y, label=label, color=color, *args, **kwargs)
 
-  if count > 1 and isinstance(pos, list):
+  elif (isinstance(pos, list) and
+        isinstance(label, list) and isinstance(color, list)):
+
     for i in range(count):
       p = _getPlot(ref, pos[i])
-      method(p, X[i], Y[i], color=color[i], *args, **kwargs)
-  else:
-    p = _getPlot(ref, pos)
-    method(p, X, Y, color=color, *args, **kwargs)
+      method(p, X[i], Y[i], label=label[i], color=color[i], *args, **kwargs)
 
   return ref
 
 
-class DType(Enum):
-  scatter = 1,
-  line = 2,
-  func = 3,
+def title(ref, title, pos=111, x=None, y=None, z=None):
+  result = False
+
+  if 'subplot' in ref:
+    sub = ref['subplot']
+
+    if pos in sub:
+      result = True
+      sub[pos].set_title(title)
+
+      if x:
+        sub[pos].set_xlabel(x)
+
+      if y:
+        sub[pos].set_ylabel(y)
+
+      if z:
+        sub[pos].set_zlabel(z)
+
+  return result
 
 
 def d2d(type=DType.scatter, X=None, Y=None, Func=None, min=None, max=None,
-        ref=None, color=None, pos=None, randomColor=False, show=False,
+        ref=None, pos=None, label=None, color=None,
+        randomColor=False, labelLocation='upper left',
         *args, **kwargs):
   if ref is None:
     ref = {}
@@ -124,11 +176,11 @@ def d2d(type=DType.scatter, X=None, Y=None, Func=None, min=None, max=None,
           X.append(dx)
           Y.append([Func[i]([x]) for x in dx])
 
-  ref = _coord(ref, X, Y, color=color, pos=pos, randomColor=randomColor,
-               method=func, *args, **kwargs)
+  ref = _coord(ref, X, Y, pos=pos, label=label, color=color,
+               randomColor=randomColor, method=func, *args, **kwargs)
 
-  if show:
-    plot.show()
+  if label is not None:
+    plot.legend(loc=labelLocation)
 
   return ref
 
