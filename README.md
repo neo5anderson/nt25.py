@@ -6,8 +6,11 @@ Neo's Tools of Python in 2025
 
 - [x] fio
 - [x] calc
-- [x] draw with 2d
-- [ ] draw with 3d
+- [x] draw
+- [ ] mysql
+- [ ] redis
+- [ ] maptrans
+- [ ] ttp
 
 ## scripts from init
 
