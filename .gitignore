@@ -15,7 +15,6 @@ uv.lock
 
 # dataset
 ds/
-*.csv
-*.xlsx
 
-
+# output
+output/

@@ -1,4 +1,5 @@
-from nt25 import fio, calc, draw, DType, __version__, __samples_path__
+import os
+from nt25 import fio, calc, draw, DType, __version__, __data_path__
 
 # import timeit
 # timeit.timeit('', number=100, globals=globals())
@@ -8,14 +9,16 @@ def main():
   print(f"Hello from {__package__}({__version__})! ")
 
   # [Neo] some file I/O: csv, xlsx
+  os.makedirs('output', exist_ok=True)
+
   fio.saveCSV({
       'Name': ['Alice', 'Bob', 'Charlie'],
       'Age': [25.2, 30, 35],
       'City': ['New York', 'Los Angeles', 'Chicago']
-  }, "out.csv", colsInline=False)
+  }, "output/out.csv")
 
-  data = fio.getXlsx(__samples_path__ + '/test.xlsx')
-  fio.saveCSV(data, "out2.csv")
+  data = fio.getXlsx(__data_path__ + '/test.xlsx')
+  fio.saveCSV(data, "output/out2.csv")
 
   h = data[0]
   s = data[1]
@@ -67,7 +70,7 @@ def main():
   bar = calc.solveEq(foo['eq'], output=True)
 
   if len(bar) > 0:
-    print('s> 750, 1.5 ~', bar[0]['func'](y=[750], x1=1.5))
+    print(f'solveEq(750, 1.5) ~ {bar[0]['func'](y=[750], x1=1.5):.4f}')
 
 
 if __name__ == "__main__":

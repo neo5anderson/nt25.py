@@ -92,7 +92,7 @@ def solveEq(eq, output=False, foo='solve'):
     s4e = re.sub(r'([-]?\d*\.\d+)', lambda m: str2e(m.group(0)), sol)
 
     if output:
-      print(f'{foo}: {eq}\n  x0 = {s4e}\n')
+      print(f'{foo}: {eq}\n\n  x0 = {s4e}\n')
 
     real.append({
         'org': eq,
