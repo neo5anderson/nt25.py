@@ -1,6 +1,4 @@
-import copy
 import os
-from sys import intern
 import time
 import json
 import struct
@@ -11,7 +9,7 @@ from datetime import UTC, datetime, timedelta, timezone
 from PIL import Image as pi
 from exif import Image, DATETIME_STR_FORMAT
 
-VERSION = "0.2.3"
+VERSION = "0.2.4"
 MAX_WIDTH = 1000
 THUMBNAIL_WIDTH = 352
 
@@ -41,23 +39,6 @@ def gpsDt2Dt(date, time, offset=8):
   d = dtFormatter(f"{date} {int(time[0])}:{int(time[1])}:{int(time[2])}")
   utc = d.replace(tzinfo=timezone.utc)
   return utc.astimezone(timezone(timedelta(hours=offset)))
-
-
-def optimizeFolder(dir, q=80, mw=MAX_WIDTH):
-  total = 0
-  shrink = 0
-
-  for d, _, f in os.walk(dir):
-    for file in f:
-      _, e = os.path.splitext(file)
-      if e.lower() in IMAGE_EXT:
-        path = os.path.join(d, file)
-        total += 1
-
-        if optimizeFile(path, q=q, mw=mw):
-          shrink += 1
-
-  return {"total": total, "shrink": shrink}
 
 
 def genThumbnail(file):
@@ -93,7 +74,7 @@ def optimizeFile(file, q=80, mw=MAX_WIDTH, copyExif=True, name=None):
   if end == ".png":
     img.save(ofile, optimize=True)
   else:
-    img.save(ofile, quality=80, optimize=True)
+    img.save(ofile, quality=q, optimize=True)
 
   img.close()
 
@@ -444,13 +425,33 @@ def main():
 
   if args.shrink is not None:
     max = args.max if args.max is not None else MAX_WIDTH
+
     if os.path.isdir(args.shrink):
-      r = optimizeFolder(args.shrink, mw=max)
-    else:
+      total = 0
+      shrink = 0
+      thumbnail = 0
+
+      for d, _, f in os.walk(args.shrink):
+        for file in f:
+          _, e = os.path.splitext(file)
+          if e.lower() in IMAGE_EXT:
+            path = os.path.join(d, file)
+            total += 1
+
+            if optimizeFile(path, mw=max):
+              shrink += 1
+
+            if args.thumbnail:
+              thumbnail += 1
+              genThumbnail(path)
+
+      r = {"total": total, "shrink": shrink, "thumbnail": thumbnail}
+
+    elif os.path.isfile(args.shrink):
       r = {"result": optimizeFile(args.shrink, mw=max)}
 
-    if args.thumbnail:
-      r.update({"thumbnail": genThumbnail(args.shrink)})
+      if args.thumbnail:
+        r.update({"thumbnail": genThumbnail(args.shrink)})
 
     result.update(r)  # type: ignore
 
