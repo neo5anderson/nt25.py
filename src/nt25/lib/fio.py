@@ -2,17 +2,16 @@ import os
 import csv
 from typing import Iterable
 
-# import openpyxl
 import pandas as pd
 
-ENCODINGS = ['utf-8', 'utf-8-sig', 'gbk']
+ENCODINGS = ["utf-8", "utf-8-sig", "gbk"]
 
 
 def _switchEnc(foo, encoding=None, *args, **kwargs):
   result = None
 
   if encoding is None:
-    for enc in ENCODINGS if os.name != 'nt' else reversed(ENCODINGS):
+    for enc in ENCODINGS if os.name != "nt" else reversed(ENCODINGS):
       try:
         result = foo(encoding=enc, *args, **kwargs)
         break
@@ -36,7 +35,7 @@ def _getCSV(file, width, startLine, startCol, encoding):
     if count >= startLine:
       maxWidth = len(line)
       for i in range(startCol, width):
-        x = line[i].strip() if maxWidth > i else ''
+        x = line[i].strip() if maxWidth > i else ""
 
         try:
           result[i - startCol].append(float(x))
@@ -59,8 +58,14 @@ def _getCSV2(file, encoding=None, colsInline=True):
 
 
 def getCSV(file, width=2, startLine=1, startCol=0, encoding=None):
-  return _switchEnc(foo=_getCSV, encoding=encoding, file=file,
-                    width=width, startLine=startLine, startCol=startCol)
+  return _switchEnc(
+    foo=_getCSV,
+    encoding=encoding,
+    file=file,
+    width=width,
+    startLine=startLine,
+    startCol=startCol,
+  )
 
 
 def getCSV2(file, encoding=None):
@@ -69,9 +74,9 @@ def getCSV2(file, encoding=None):
 
 def saveCSV(data, file, encoding=None, colsInline=True):
   if encoding is None:
-    encoding = 'utf-8'
+    encoding = "utf-8"
 
-  with open(file, 'w', newline='', encoding=encoding) as f:
+  with open(file, "w", newline="", encoding=encoding) as f:
     content = []
 
     for d in data:

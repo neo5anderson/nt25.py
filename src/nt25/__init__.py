@@ -5,7 +5,15 @@ from .lib.draw import DType
 from .lib.sqlite import SQLite
 
 __version__ = meta.version(str(__package__))
-__data_path__ = __file__.replace('__init__.py', 'data')
+__data_path__ = __file__.replace("__init__.py", "data")
 
-__all__ = ('__version__', '__data_path__',
-           'fio', 'calc', 'draw', 'DType', 'et', 'SQLite')
+__all__ = (
+  "__version__",
+  "__data_path__",
+  "fio",
+  "calc",
+  "draw",
+  "DType",
+  "et",
+  "SQLite",
+)

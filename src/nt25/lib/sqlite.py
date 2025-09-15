@@ -10,12 +10,12 @@ def getColumns(sql):
   while len(sql) > 0:
     if not head:
       h = sql.pop(0)
-      if h.endswith('('):
+      if h.endswith("("):
         head = True
 
     if not tail:
       t = sql.pop(len(sql) - 1)
-      if t.endswith(';') or t.endswith(')'):
+      if t.endswith(";") or t.endswith(")"):
         tail = True
 
     if head and tail:
@@ -32,13 +32,13 @@ class SQLite:
       self.parse(file)
 
   def parse(self, file):
-    with open(file, encoding='utf-8') as f:
+    with open(file, encoding="utf-8") as f:
       content = f.read()
 
-      sKey = re.findall('-- # (.*)\n', content)
-      sSQL = re.split('-- #.*\n', content)
+      sKey = re.findall("-- # (.*)\n", content)
+      sSQL = re.split("-- #.*\n", content)
 
-      if (len(sSQL) > len(sKey)):
+      if len(sSQL) > len(sKey):
         del sSQL[0]
 
       self.sql = {}
@@ -79,23 +79,23 @@ class SQLite:
 
   def key2str(self, key):
     if key not in self.sql:
-      return '> {0} not found\n\n'.format(key)
+      return "> {0} not found\n\n".format(key)
 
-    s = ''
+    s = ""
     try:
       t, r = self.exec(key)  # type: ignore
 
       if t is not None:
         if r is not None and len(r) > 0:
-          rows = '\n'.join(map(lambda x: str(x), r))
-          s = '> {0}\n{1}\n{2}\n\n'.format(key, t, rows)
+          rows = "\n".join(map(lambda x: str(x), r))
+          s = "> {0}\n{1}\n{2}\n\n".format(key, t, rows)
         else:
-          s = '> {0}\n{1}\n\n'.format(key, t)
+          s = "> {0}\n{1}\n\n".format(key, t)
       else:
-        s = '> {0}\n\n'.format(key)
+        s = "> {0}\n\n".format(key)
 
     except Exception as e:
-      s = '> {0}, bad: {1}!\n\n'.format(key, e)
+      s = "> {0}, bad: {1}!\n\n".format(key, e)
 
     return s
 
@@ -109,7 +109,7 @@ class SQLite:
         self.cursor.executescript(sql)
 
         if self.db.total_changes > 0:
-          print('SQLite> db.changed', self.db.total_changes)
+          print("SQLite> db.changed", self.db.total_changes)
 
         self.db.commit()
 
@@ -127,7 +127,7 @@ class SQLite:
           res = self.cursor.execute(sql)
 
         if self.db.total_changes > 0:
-          print('SQLite> db.changed', self.db.total_changes)
+          print("SQLite> db.changed", self.db.total_changes)
 
         if res and res.description:
           title = []

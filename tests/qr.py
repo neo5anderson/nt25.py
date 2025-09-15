@@ -8,14 +8,23 @@ from pyzbar.pyzbar import decode
 from PIL import Image, ImageOps
 
 
-def make_qr(data: str, file: str, mask=6, size=10, border=4,
-            ecc=qrcode.constants.ERROR_CORRECT_L, fg="black", bg="white",):
+def make_qr(
+  data: str,
+  file: str,
+  mask=6,
+  size=10,
+  border=4,
+  ecc=qrcode.constants.ERROR_CORRECT_L,
+  fg="black",
+  bg="white",
+):
   qr = qrcode.QRCode(
-      version=None,
-      mask_pattern=mask,
-      error_correction=ecc,
-      box_size=size,
-      border=border,)
+    version=None,
+    mask_pattern=mask,
+    error_correction=ecc,
+    box_size=size,
+    border=border,
+  )
 
   qr.add_data(data)
   qr.make(fit=True)
@@ -44,7 +53,7 @@ if __name__ == "__main__":
   url = "http://a.b.c/entryid=view&yzm=S39c9817bbebac8av"
   target = "o.png"
 
-  make_qr(url, target+".png")
+  make_qr(url, target + ".png")
   read_qr("qa.png")
   read_qr("na.jpg")
   read_qr("o.png.png")

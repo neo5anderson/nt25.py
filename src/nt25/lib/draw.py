@@ -13,60 +13,58 @@ from . import calc
 
 
 FONTS = [
-    'Microsoft YaHei',
-    'PingFang SC',
-    'Arial Unicode MS',
-    'Noto Sans CJK SC',
-    'Arial'
+  "Microsoft YaHei",
+  "PingFang SC",
+  "Arial Unicode MS",
+  "Noto Sans CJK SC",
+  "Arial",
 ]
 
-COLORS = ['blue', 'red', 'orange', 'black', 'pink']
+COLORS = ["blue", "red", "orange", "black", "pink"]
 
 REFS = []
 
 
 class DType(Enum):
-  dot = 1,
-  line = 2,
-  func = 3,
-  dot3d = 4,
-  wireframe = 5,
-  surface = 6,
+  dot = 1
+  line = 2
+  func = 3
+  dot3d = 4
+  wireframe = 5
+  surface = 6
 
 
 def onClose(event):
   global REFS
 
   for r in REFS:
-    del r['figure']
-    del r['subplot']
+    del r["figure"]
+    del r["subplot"]
 
   REFS.clear()
 
 
 def _getPlot(ref, pos, is3D):
-  # def _getPlot(ref, pos, is3D) -> Axes | Axes3D:
   global REFS
 
-  if 'figure' not in ref:
+  if "figure" not in ref:
     fig = plot.figure()
-    fig.canvas.mpl_connect('close_event', onClose)
+    fig.canvas.mpl_connect("close_event", onClose)
 
-    plot.rcParams['font.sans-serif'] = FONTS
-    plot.rcParams['axes.unicode_minus'] = False
+    plot.rcParams["font.sans-serif"] = FONTS
+    plot.rcParams["axes.unicode_minus"] = False
 
-    ref['figure'] = fig
+    ref["figure"] = fig
     REFS.append(ref)
 
-  if 'subplot' not in ref:
-    ref['subplot'] = {}
+  if "subplot" not in ref:
+    ref["subplot"] = {}
 
-  fig = ref['figure']
-  sub = ref['subplot']
+  fig = ref["figure"]
+  sub = ref["subplot"]
 
   if pos not in sub:
-    sub[pos] = fig.add_subplot(
-        pos, projection='3d') if is3D else fig.add_subplot(pos)
+    sub[pos] = fig.add_subplot(pos, projection="3d") if is3D else fig.add_subplot(pos)
 
   return sub[pos]
 
@@ -98,8 +96,8 @@ def _genParam(pIn, pDefault, count):
 def title(ref, title, pos=111, x=None, y=None, z=None):
   result = False
 
-  if 'subplot' in ref:
-    sub = ref['subplot']
+  if "subplot" in ref:
+    sub = ref["subplot"]
 
     if pos in sub:
       result = True
@@ -127,10 +125,23 @@ def _gen3DXY(X, Y, extend=0.2):
   return np.meshgrid(d0, d1)
 
 
-def draw(type=DType.dot, X=None, Y=None, Z=None, Func=None, min=None, max=None,
-         ref=None, pos=None, label=None, color=None, randomColor=False,
-         labelLocation='upper left', *args, **kwargs):
-
+def draw(
+  type=DType.dot,
+  X=None,
+  Y=None,
+  Z=None,
+  Func=None,
+  min=None,
+  max=None,
+  ref=None,
+  pos=None,
+  label=None,
+  color=None,
+  randomColor=False,
+  labelLocation="upper left",
+  *args,
+  **kwargs,
+):
   if ref is None:
     ref = {}
 
@@ -152,8 +163,10 @@ def draw(type=DType.dot, X=None, Y=None, Z=None, Func=None, min=None, max=None,
         Y = []
 
         for i in range(len(Func)):
-          dx = np.linspace(min[i] if isinstance(min, (list, tuple)) else min,
-                           max[i] if isinstance(max, (list, tuple)) else max)
+          dx = np.linspace(
+            min[i] if isinstance(min, (list, tuple)) else min,
+            max[i] if isinstance(max, (list, tuple)) else max,
+          )
 
           X.append(dx)
           Y.append([Func[i]([x]) for x in dx])
@@ -201,7 +214,7 @@ def draw(type=DType.dot, X=None, Y=None, Z=None, Func=None, min=None, max=None,
         return
 
       F = calc.xn2y([X, Y], Z, degree=3)
-      Func = F['func']
+      Func = F["func"]
 
     if Func is None:
       print("Func cannot be None")
@@ -241,13 +254,21 @@ def draw(type=DType.dot, X=None, Y=None, Z=None, Func=None, min=None, max=None,
     p = _getPlot(ref, pos, is3D)
     _draw(method, p, type, X, Y, Z, label=label, color=color, *args, **kwargs)
 
-  elif (isinstance(pos, list) and
-        isinstance(label, list) and isinstance(color, list)):
-
+  elif isinstance(pos, list) and isinstance(label, list) and isinstance(color, list):
     for i in range(count):
       p = _getPlot(ref, pos[i], is3D)
-      _draw(method, p, type, X[i], Y[i], Z[i]
-            if isinstance(Z, list) else None, label, color, *args, **kwargs)
+      _draw(
+        method,
+        p,
+        type,
+        X[i],
+        Y[i],
+        Z[i] if isinstance(Z, list) else None,
+        label,
+        color,
+        *args,
+        **kwargs,
+      )
 
   if label is not None:
     plot.legend(loc=labelLocation)
@@ -258,8 +279,7 @@ def draw(type=DType.dot, X=None, Y=None, Z=None, Func=None, min=None, max=None,
 def _draw(method, p, type, x, y, z, label, color, *args, **kwargs):
   match type:
     case DType.dot3d | DType.wireframe:
-      method(p, x, y, z, label=label, color=color,
-             antialiased=True, *args, **kwargs)
+      method(p, x, y, z, label=label, color=color, antialiased=True, *args, **kwargs)
 
     case DType.surface:
       method(p, x, y, z, label=label, antialiased=True, *args, **kwargs)
