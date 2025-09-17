@@ -1,6 +1,6 @@
 [project]
 name = "nt25"
-version = "0.2.4"
+version = "0.2.5"
 description = "Neo's Tools of Python"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -19,6 +19,7 @@ dependencies = [
 [project.scripts]
 demo = "nt25.demo:main"
 et = "nt25.lib.et:main"
+ef = "nt25.lib.ef:main"
 mt = "nt25.mt:main"
 ttp = "nt25.ttp:main"
 pgogs = "nt25.pgogs:main"

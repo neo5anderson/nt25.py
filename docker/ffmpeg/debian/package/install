@@ -1,0 +1,58 @@
+#!/bin/bash
+cp2() {
+  if [ -z "$1" ]; then
+    echo "expect container name"
+    return 1
+  fi
+
+  for i in *; do
+    docker cp $i $1:/lib64
+    # docker cp $i $1:/usr/lib/x86_64-linux-gnu/
+  done
+}
+
+genSoft() {
+  for i in *.so.*; do
+    f=$i
+    prefix=${f%%.so.*}
+    rest=${f#"$prefix.so."}
+
+    target=$prefix.so.${rest%%.*}
+    if [ $f != $target ]; then
+      ln -s $f $target
+    fi
+
+  done
+}
+
+genMain() {
+  if [ -z "$1" ]; then
+    echo "expect main version"
+    return 1
+  fi
+
+  for i in *.so.*; do
+    f=$i
+    prefix=${f%%.so.*}
+    target=$prefix.so.$1
+    if [ $f != $target ]; then
+      ln -s $f $target
+    fi
+
+  done
+}
+
+chmod +x ffmpeg
+mv ffmpeg /usr/local/bin
+mv static/* 0/
+
+cd 0
+genSoft
+mv * /usr/lib/x86_64-linux-gnu/
+
+cd ../1
+genMain 1
+mv * /usr/lib/x86_64-linux-gnu/
+
+echo '' >> /root/.bashrc
+echo 'export PATH=/usr/local/openjdk-17/bin:$PATH' >> /root/.bashrc

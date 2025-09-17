@@ -8,7 +8,8 @@
 
 src=./src/nt25/lib/et.py
 
-rm -rf dist/*
+rm -rf dist*
+
 uv run pyinstaller -F $src &
 # uv run pyinstaller --clean -F $src &
 

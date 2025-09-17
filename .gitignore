@@ -16,7 +16,6 @@ scripts/uv
 
 dist*.zip
 
-
 # dataset
 ds/
 
@@ -25,6 +24,5 @@ out.csv
 output/
 
 # test
-tests/**/*.jpg
-tests/**/*.png
-
+tests
+docker
