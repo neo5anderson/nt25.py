@@ -8,7 +8,8 @@ Neo's Tools of Python in 2025
 - [x] calc
 - [x] draw
 - [x] sqlite
-- [x] et: EXIF tools
+- [x] et: EXIF tools with pillow
+- [x] ef: EXIF tools with FFmpeg
 - [x] mt: MapXYZ Transfer tool
 - [x] ttp: TIFF to PNG, thread support
 - [x] pgogs: Purge Gogs orphan files
@@ -18,11 +19,11 @@ Neo's Tools of Python in 2025
 ## scripts from init
 
 ```sh
-uv init
 # fio, calc, draw basic demo
 uv run demo
-# et
-uv run et
+
+# ef
+uv run ef -v
 ```
 
 ## fun

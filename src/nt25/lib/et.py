@@ -4,6 +4,7 @@ import json
 import struct
 import argparse
 
+from random import randint
 from datetime import UTC, datetime, timedelta, timezone
 
 from PIL import Image as pi
@@ -16,6 +17,7 @@ THUMBNAIL_WIDTH = 352
 COMMENT_SEGMENT = b"\xff\xfe"
 EPOCH = datetime.fromtimestamp(0, UTC)
 IMAGE_EXT = (".jpg", ".jpeg", ".png", ".bmp")
+# IMAGE_EXT = (".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".webp")
 
 
 NOT_FOUND = "not found"
@@ -64,36 +66,37 @@ def optimizeFile(file, q=80, mw=MAX_WIDTH, copyExif=True, name=None):
     img = img.resize((w, h))
 
   _, ext = os.path.splitext(file)
-
   end = ext.lower()
+
   if img.mode == "RGB":
     end = ".jpg"
 
-  ofile = file + end
+  suffix = str(randint(1000, 9999)) + end
+  ofile = file + suffix
 
   if end == ".png":
     img.save(ofile, optimize=True)
-  else:
+  elif end == ".jpg" or end == ".jpeg":
     img.save(ofile, quality=q, optimize=True)
+  else:
+    img.save(ofile, optimize=True)
 
   img.close()
 
-  if os.path.getsize(ofile) < os.path.getsize(file) * 0.8:
-    optimized = True
+  if not os.path.exists(ofile):
+    return optimized
 
-    if copyExif:
-      transplant(file, ofile, optimize=False)
+  if copyExif:
+    transplant(file, ofile, optimize=False)
 
-    if name is not None:
-      os.replace(ofile, name)
-    else:
-      os.replace(ofile, file)
+  optimized = os.path.getsize(ofile) < os.path.getsize(file) * 0.8
 
+  if name is not None:
+    os.replace(ofile, name)
+  elif optimized:
+    os.replace(ofile, file)
   else:
-    if name is not None:
-      os.replace(ofile, name)
-    else:
-      os.remove(ofile)
+    os.remove(ofile)
 
   return optimized
 
@@ -144,12 +147,12 @@ def parseExif(file, optimize=False):
   if optimize:
     result["optimized"] = optimizeFile(file)
 
-  width = tryGet(img, "pixel_x_dimension", -1)
-  height = tryGet(img, "pixel_y_dimension", -1)
+  # width = tryGet(img, "pixel_x_dimension", -1)
+  # height = tryGet(img, "pixel_y_dimension", -1)
 
-  if width < 0:
-    width = tryGet(img, "image_width", -1)
-    height = tryGet(img, "image_height", -1)
+  # if width < 0:
+  #   width = tryGet(img, "image_width", -1)
+  #   height = tryGet(img, "image_height", -1)
 
   create = tryGet(img, "datetime_original", None)
   modify = tryGet(img, "datetime", None)
@@ -192,8 +195,8 @@ def parseExif(file, optimize=False):
 
   result.update(
     {
-      "width": width,
-      "height": height,
+      # "width": width,
+      # "height": height,
       "latitude": latitude,
       "longitude": longitude,
       "datetime.create": dt2str(createDt),
@@ -453,7 +456,8 @@ def main():
       if args.thumbnail:
         r.update({"thumbnail": genThumbnail(args.shrink)})
 
-    result.update(r)  # type: ignore
+    if r is not None:
+      result.update(r)  # type: ignore
 
   if len(result) > 0:
     print(

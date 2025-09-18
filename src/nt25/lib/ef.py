@@ -3,12 +3,14 @@ import time
 import json
 import struct
 import argparse
-
 import subprocess
-from pathlib import Path
-from random import randint
 
+from shutil import which
+from pathlib import Path
+
+from random import randint
 from datetime import UTC, datetime, timedelta, timezone
+
 from exif import Image, DATETIME_STR_FORMAT
 
 VERSION = "0.1.0"
@@ -17,11 +19,14 @@ THUMBNAIL_WIDTH = 352
 
 COMMENT_SEGMENT = b"\xff\xfe"
 EPOCH = datetime.fromtimestamp(0, UTC)
-IMAGE_EXT = (".jpg", ".jpeg", ".png", ".bmp", ".gif")
-# IMAGE_EXT = (".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".webp")
+IMAGE_EXT = (".jpg", ".jpeg", ".png", ".bmp")
 
 NOT_FOUND = "not found"
 INTERNAL_FAILED = "internal failed"
+
+
+def _check():
+  return which("ffmpeg") is not None
 
 
 def _run(cmd):
@@ -63,12 +68,13 @@ def optimizeFile(file, q=80, mw=MAX_WIDTH, copyExif=True, name=None):
   if t == "none" or w < 0 or h < 0:
     return optimized
 
-  print(t, w, h)
-  m = max(w, h)
+  if not _check():
+    return optimized
 
   path = str(Path(file).resolve())
   shell = ["ffmpeg", "-i", path]
 
+  m = max(w, h)
   if m > mw:
     scale = mw / m
     h = int(scale * h)
@@ -148,12 +154,12 @@ def parseExif(file, optimize=False):
   if optimize:
     result["optimized"] = optimizeFile(file)
 
-  width = tryGet(img, "pixel_x_dimension", -1)
-  height = tryGet(img, "pixel_y_dimension", -1)
+  # width = tryGet(img, "pixel_x_dimension", -1)
+  # height = tryGet(img, "pixel_y_dimension", -1)
 
-  if width < 0:
-    width = tryGet(img, "image_width", -1)
-    height = tryGet(img, "image_height", -1)
+  # if width < 0:
+  #   width = tryGet(img, "image_width", -1)
+  #   height = tryGet(img, "image_height", -1)
 
   create = tryGet(img, "datetime_original", None)
   modify = tryGet(img, "datetime", None)
@@ -196,8 +202,8 @@ def parseExif(file, optimize=False):
 
   result.update(
     {
-      "width": width,
-      "height": height,
+      # "width": width,
+      # "height": height,
       "latitude": latitude,
       "longitude": longitude,
       "datetime.create": dt2str(createDt),
@@ -383,14 +389,14 @@ def getWH(file: str) -> tuple[str, int, int]:
       while i < len(data):
         (marker,) = struct.unpack(">H", data[i : i + 2])
         if 0xFFC0 <= marker <= 0xFFCF:
-          (block_len,) = struct.unpack(">H", data[i + 2 : i + 4])
+          (block,) = struct.unpack(">H", data[i + 2 : i + 4])
           type = "jpg"
           height, width = struct.unpack(">HH", data[i + 5 : i + 9])
           break
 
         else:
-          (block_len,) = struct.unpack(">H", data[i + 2 : i + 4])
-          i += 2 + block_len
+          (block,) = struct.unpack(">H", data[i + 2 : i + 4])
+          i += 2 + block
 
     elif header.startswith(b"\x89PNG\r\n\x1a\n"):
       f.seek(16)
@@ -407,52 +413,87 @@ def getWH(file: str) -> tuple[str, int, int]:
       type = "bmp"
       width, height = struct.unpack("<II", f.read(8))
 
-    elif (
-      header.startswith(b"II*\x00")
-      or header.startswith(b"MM\x00*")
-      or header.startswith(b"II+\x00")
-    ):
+    elif header.startswith(b"II") or header.startswith(b"MM"):
       f.seek(0)
-      byte_order = f.read(2)
+      order = f.read(2)
 
       endian = None
-      if byte_order == b"II":
-        endian = "<"  # little endian
-      elif byte_order == b"MM":
-        endian = ">"  # big endian
+      if order == b"II":
+        endian = "<"
+      elif order == b"MM":
+        endian = ">"
 
       if endian is not None:
-        magic = struct.unpack(endian + "H", f.read(2))[0]
-        # TODO
-        if magic == 43:
-          # if magic == 42:
-          ifd_offset = struct.unpack(endian + "I", f.read(4))[0]
-          f.seek(ifd_offset)
+        version = struct.unpack(endian + "H", header[2:4])[0]
 
-          num_entries = struct.unpack(endian + "H", f.read(2))[0]
+        offset = 0
+        if version == 42:  # ClassicTIFF
+          offset_size = 4
+          entry_size = 12
 
-          for _ in range(num_entries):
-            tag, type_, count, value = struct.unpack(endian + "HHII", f.read(12))
+          f.seek(4)
+          offset = struct.unpack(endian + "I", f.read(4))[0]
+
+          def parse(offset):
+            f.seek(offset)
+
+            entries = []
+            count = struct.unpack(endian + "H", f.read(2))[0]
+            for _ in range(count):
+              raw = f.read(entry_size)
+              tag, typ, count, value = struct.unpack(endian + "HHII", raw)
+              entries.append((tag, typ, count, value))
+
+            next = struct.unpack(endian + "I", f.read(4))[0]
+            return entries, next
+
+        elif version == 43:  # BigTIFF
+          offset_size = struct.unpack(endian + "H", header[4:6])[0]
+          if offset_size == 8:
+            entry_size = 20
+            offset = struct.unpack(endian + "Q", header[8:16])[0]
+
+            def parse(offset):
+              f.seek(offset)
+
+              entries = []
+              count = struct.unpack(endian + "Q", f.read(8))[0]
+
+              for _ in range(count):
+                raw = f.read(entry_size)
+                tag, typ = struct.unpack(endian + "HH", raw[:4])
+                count = struct.unpack(endian + "Q", raw[4:12])[0]
+                value = struct.unpack(endian + "Q", raw[12:20])[0]
+                entries.append((tag, typ, count, value))
+
+              next = struct.unpack(endian + "Q", f.read(8))[0]
+              return entries, next
+
+        while offset != 0:
+          entries, offset = parse(offset)
+
+          for tag, typ, count, value in entries:
             if tag == 256:
               width = int(value)
             elif tag == 257:
               height = int(value)
 
-            if width and height:
-              type = "tiff"
-              break
+          if width > 0 and height > 0:
+            type = "tiff"
+            break
 
     elif header[0:4] == b"RIFF" and header[8:12] == b"WEBP":
       f.seek(0)
       riff, size, webp = struct.unpack("4sI4s", f.read(12))
+
       if riff == b"RIFF" and webp == b"WEBP":
         type = "webp"
         chunk_header = f.read(4)
         if chunk_header == b"VP8X":
           f.seek(8, 1)
-          width_minus1, height_minus1 = struct.unpack("<3s3s", f.read(6))
-          width = int.from_bytes(width_minus1, "little") + 1
-          height = int.from_bytes(height_minus1, "little") + 1
+          wb, hb = struct.unpack("<3s3s", f.read(6))
+          width = int.from_bytes(wb, "little") + 1
+          height = int.from_bytes(hb, "little") + 1
 
         elif chunk_header == b"VP8L":
           f.seek(5, 1)
@@ -470,12 +511,6 @@ def getWH(file: str) -> tuple[str, int, int]:
           type = "none"
           height = -1
           width = -1
-
-    else:
-      for i in range(5):
-        print(header[i], chr(header[i]))
-
-      print("ooo")
 
   return (type, height, width)
 

@@ -1,6 +1,6 @@
 import importlib.metadata as meta
 
-from .lib import fio, calc, draw, et
+from .lib import fio, calc, draw, et, ef
 from .lib.draw import DType
 from .lib.sqlite import SQLite
 
@@ -13,7 +13,8 @@ __all__ = (
   "fio",
   "calc",
   "draw",
-  "DType",
   "et",
+  "ef",
+  "DType",
   "SQLite",
 )

@@ -5,7 +5,6 @@ description = "Neo's Tools of Python"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "pyinstaller>=6.15.0",
     "exif>=1.6.1",
     "matplotlib>=3.10.6",
     "pandas>=2.3.2",
@@ -14,6 +13,7 @@ dependencies = [
     "sympy>=1.14.0",
     "pillow>=11.3.0",
     "requests>=2.32.5",
+    "pyinstaller>=6.16.0",
 ]
 
 [project.scripts]
