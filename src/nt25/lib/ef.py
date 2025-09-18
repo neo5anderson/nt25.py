@@ -13,7 +13,7 @@ from datetime import UTC, datetime, timedelta, timezone
 
 from exif import Image, DATETIME_STR_FORMAT
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 MAX_WIDTH = 1000
 THUMBNAIL_WIDTH = 352
 
@@ -55,17 +55,17 @@ def gpsDt2Dt(date, time, offset=8):
 def genThumbnail(file):
   _, ext = os.path.splitext(file)
   name = file[: -len(ext)] + ".thumbnail" + ext
-  return optimizeFile(file, mw=THUMBNAIL_WIDTH, copyExif=False, name=name)
+  return optimizeFile(file, mw=THUMBNAIL_WIDTH, copy=False, name=name)
 
 
-def optimizeFile(file, q=80, mw=MAX_WIDTH, copyExif=True, name=None):
+def optimizeFile(file, q=80, mw=MAX_WIDTH, copy=True, name=None):
   optimized = False
 
   if not os.path.exists(file):
     return optimized
 
   t, w, h = getWH(file)
-  if t == "none" or w < 0 or h < 0:
+  if t == "null" or w < 0 or h < 0:
     return optimized
 
   if not _check():
@@ -80,8 +80,7 @@ def optimizeFile(file, q=80, mw=MAX_WIDTH, copyExif=True, name=None):
     h = int(scale * h)
     shell += ["-vf", f"scale={h}:-1"]
 
-  _, ext = os.path.splitext(file)
-  suffix = str(randint(1000, 9999)) + ext
+  suffix = str(randint(1000, 9999)) + t
   ofile = file + suffix
 
   shell += ["-y", path + suffix]
@@ -93,9 +92,7 @@ def optimizeFile(file, q=80, mw=MAX_WIDTH, copyExif=True, name=None):
   if not os.path.exists(ofile):
     return optimized
 
-  if copyExif:
-    transplant(file, ofile, optimize=False)
-
+  copyExif(file, ofile, optimize=False, copy=copy)
   optimized = os.path.getsize(ofile) < os.path.getsize(file) * 0.8
 
   if name is not None:
@@ -329,7 +326,7 @@ def removeExif(file, optimize=False):
       )
     )
 
-    segments = _comment(segments, "nt25.et")
+    segments = _comment(segments, "nt25.ef")
     data = b"".join(segments)
 
     with open(file, "wb+") as f:
@@ -342,21 +339,23 @@ def removeExif(file, optimize=False):
   return result
 
 
-def transplant(src, dst, optimize=False):
+def copyExif(src, dst, optimize=False, copy=True):
   result = {}
 
   if not os.path.exists(src) or not os.path.exists(dst):
     result["file"] = NOT_FOUND
     return result
 
-  with open(src, "rb") as f:
-    s = f.read()
+  exif = b""
+  if copy:
+    with open(src, "rb") as f:
+      s = f.read()
 
-  segments = _segments(s)
-  exif = _exif(segments)
+    segments = _segments(s)
+    exif = _exif(segments)
 
   if optimize:
-    result["optimized"] = optimizeFile(dst, copyExif=False)
+    result["optimized"] = optimizeFile(dst, copy=False)
 
   with open(dst, "rb") as f:
     data = f.read()
@@ -364,7 +363,7 @@ def transplant(src, dst, optimize=False):
   segments = _segments(data)
 
   if len(segments) > 1:
-    segments = _comment(segments, "nt25.et")
+    segments = _comment(segments, "nt25.ef")
     data = _merge(segments, exif)
 
     with open(dst, "wb+") as f:
@@ -378,39 +377,43 @@ def getWH(file: str) -> tuple[str, int, int]:
   with open(file, "rb") as f:
     header = f.read(16)
 
-    type = "none"
+    type = "null"
     height = -1
     width = -1
 
     if header.startswith(b"\xff\xd8\xff"):
       f.seek(0)
       data = f.read()
+
       i = 2
       while i < len(data):
         (marker,) = struct.unpack(">H", data[i : i + 2])
-        if 0xFFC0 <= marker <= 0xFFCF:
-          (block,) = struct.unpack(">H", data[i + 2 : i + 4])
-          type = "jpg"
+        (block,) = struct.unpack(">H", data[i + 2 : i + 4])
+
+        if 0xFFC0 == marker:
+          type = ".jpg"
           height, width = struct.unpack(">HH", data[i + 5 : i + 9])
           break
 
-        else:
-          (block,) = struct.unpack(">H", data[i + 2 : i + 4])
-          i += 2 + block
+        i += 2 + block
 
     elif header.startswith(b"\x89PNG\r\n\x1a\n"):
       f.seek(16)
-      type = "png"
+      type = ".png"
       width, height = struct.unpack(">II", f.read(8))
+
+      typ = f.read(2)
+      if typ[1] <= 2:
+        type = ".png.jpg"
 
     elif header.startswith(b"GIF87a") or header.startswith(b"GIF89a"):
       f.seek(6)
-      type = "gif"
+      type = ".gif"
       width, height = struct.unpack("<HH", f.read(4))
 
     elif header.startswith(b"BM"):
       f.seek(18)
-      type = "bmp"
+      type = ".bmp.jpg"
       width, height = struct.unpack("<II", f.read(8))
 
     elif header.startswith(b"II") or header.startswith(b"MM"):
@@ -479,7 +482,7 @@ def getWH(file: str) -> tuple[str, int, int]:
               height = int(value)
 
           if width > 0 and height > 0:
-            type = "tiff"
+            type = ".tiff"
             break
 
     elif header[0:4] == b"RIFF" and header[8:12] == b"WEBP":
@@ -487,7 +490,7 @@ def getWH(file: str) -> tuple[str, int, int]:
       riff, size, webp = struct.unpack("4sI4s", f.read(12))
 
       if riff == b"RIFF" and webp == b"WEBP":
-        type = "webp"
+        type = ".webp"
         chunk_header = f.read(4)
         if chunk_header == b"VP8X":
           f.seek(8, 1)
@@ -508,7 +511,7 @@ def getWH(file: str) -> tuple[str, int, int]:
           height &= 0x3FFF
 
         else:
-          type = "none"
+          type = "null"
           height = -1
           width = -1
 
@@ -566,7 +569,7 @@ def main():
     if args.dump:
       r = dumpExif(args.file, optimize=opt)
     elif args.copy:
-      r = transplant(args.copy, args.file, optimize=opt)
+      r = copyExif(args.copy, args.file, optimize=opt)
     elif args.rm:
       r = removeExif(args.file, optimize=opt)
     else:
@@ -589,7 +592,6 @@ def main():
             path = os.path.join(d, file)
             total += 1
 
-            print(f"opt: {path}")
             if optimizeFile(path, mw=max):
               shrink += 1
 
