@@ -1,0 +1,6 @@
+#!/bin/bash
+
+chmod +x bin/ffmpeg
+chmod +x bin/ef
+mv bin/* /usr/local/bin
+mv lib/* /usr/lib/x86_64-linux-gnu/

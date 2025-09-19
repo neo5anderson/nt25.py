@@ -13,7 +13,7 @@ from datetime import UTC, datetime, timedelta, timezone
 
 from exif import Image, DATETIME_STR_FORMAT
 
-VERSION = "0.1.1"
+VERSION = "0.1.2"
 MAX_WIDTH = 1000
 THUMBNAIL_WIDTH = 352
 
@@ -146,7 +146,11 @@ def parseExif(file, optimize=False):
     return result
 
   with open(file, "rb") as f:
-    img = Image(f)
+    try:
+      img = Image(f)
+    except Exception:
+      result["file"] = INTERNAL_FAILED
+      return result
 
   if optimize:
     result["optimized"] = optimizeFile(file)

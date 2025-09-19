@@ -1,0 +1,24 @@
+#!/bin/bash
+
+findso() {
+  find /usr/bin /usr/lib/x86_64-linux-gnu /lib/x86_64-linux-gnu /usr/local/lib/x86_64-linux-gnu /usr/local/lib -name "${1}.*" -type f,l 2>/dev/null | while read f; do realpath "$f"; done | sort -u
+}
+
+trans() {
+  bn=`basename $1`
+  docker cp uvt:$1 .
+  if [ -e "$bn" ]; then
+    docker cp $bn eff:/usr/lib/x86_64-linux-gnu/
+  fi
+}
+
+# for i in `cat lib1.txt`; do
+#   findso $i
+# done
+
+# for i in `cat path.txt`; do
+#   trans $i
+# done
+
+# findso $1
+trans $1

@@ -1,5 +1,4 @@
-FROM openjdk:17-slim-bullseye
-# FROM maven:3.8-openjdk-17-slim
+FROM eclipse-temurin:17-jre-noble
 
 WORKDIR /root
 COPY ffmpeg.tar.gz /root
@@ -7,7 +6,7 @@ COPY ffmpeg.tar.gz /root
 RUN set -eux; \
   cd /root; \
   tar zxf ffmpeg.tar.gz; \
-  cd package; \
+  cd pack; \
   ./install; \
   cd /root; \
   rm -rf *; \
@@ -17,4 +16,4 @@ RUN set -eux; \
     /var/cache/* \
     /tmp/*
 
-CMD ["ffmpeg", "-codecs"]
+CMD ["java", "--version"]

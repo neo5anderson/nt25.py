@@ -10,10 +10,10 @@ src=./src/nt25/lib/ef.py
 
 rm -rf dist*
 
-uv run pyinstaller -F $src &
+uv run pyinstaller -F --optimize 2 -s src/nt25/lib/ef.py &
 # uv run pyinstaller --clean -F $src &
 
-docker cp $src uv:/root/ && docker exec uv uv run pyinstaller ef.spec && docker cp uv:/root/dist/ef dist
+docker cp $src uv:/root/ && docker exec uv uv run pyinstaller -F --optimize 2 -s ef.py && docker cp uv:/root/dist/ef dist
 
 7z a dist-.zip dist
 7z l dist-.zip

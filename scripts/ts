@@ -1,0 +1,19 @@
+#!/bin/bash
+
+trans() {
+  bn=`basename $1`
+  docker cp uvt:$1 .
+  if [ -e "$bn" ]; then
+    docker cp $bn jre:/usr/lib/x86_64-linux-gnu/$2
+  fi
+}
+
+if [ $# -gt 0 ]; then
+  trans $1 $2
+# elif [ ! -t 0 ]; then
+#   echo 'pipe input'
+#   while IFS= read -r line; do
+#     trans $line
+#   done
+fi
+

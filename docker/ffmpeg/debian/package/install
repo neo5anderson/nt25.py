@@ -44,15 +44,15 @@ genMain() {
 
 chmod +x ffmpeg
 mv ffmpeg /usr/local/bin
-mv static/* 0/
 
 cd 0
 genSoft
+mv ../static/* .
 mv * /usr/lib/x86_64-linux-gnu/
 
 cd ../1
 genMain 1
 mv * /usr/lib/x86_64-linux-gnu/
 
-echo '' >> /root/.bashrc
-echo 'export PATH=/usr/local/openjdk-17/bin:$PATH' >> /root/.bashrc
+# echo '' >> /root/.bashrc
+# echo 'export PATH=/usr/local/openjdk-17/bin:$PATH' >> /root/.bashrc

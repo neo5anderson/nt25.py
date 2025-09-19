@@ -1,0 +1,25 @@
+#!/bin/bash
+
+n=c
+while [ ".$n" != ".q" ]; do
+  lib=`docker exec jre ffmpeg 2>&1 | grep -o 'lib[^:]*so[^:]*:'`
+
+  soft=${lib%:}
+  prefix=${soft%.so.*}
+  prefix=${prefix%.so}
+
+  libPath=`docker exec uvt fs $prefix.so`
+
+  if [ ! -z $libPath ]; then
+    file=`basename $libPath`
+    ./ts $libPath $soft > /dev/null
+    mv $file $soft
+    # docker exec jre gens $file $soft
+  else
+    echo failed $lib, $prefix
+    echo quit?
+    read n
+  fi
+
+done
+

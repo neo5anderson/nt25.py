@@ -1,4 +1,5 @@
-FROM debian:bullseye-slim
+FROM debian:trixie-slim
+# FROM debian:bullseye-slim
 WORKDIR /root
 
 RUN set -eux; \
