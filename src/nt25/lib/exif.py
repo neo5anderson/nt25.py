@@ -6,10 +6,10 @@ import struct
 import argparse
 import subprocess
 
-from enum import Enum
 from math import ceil
 from shutil import which
 from random import randint
+from dataclasses import dataclass
 
 from pathlib import Path
 from datetime import UTC, datetime, timedelta, timezone
@@ -17,32 +17,53 @@ from datetime import UTC, datetime, timedelta, timezone
 from PIL import Image, ImageOps
 
 
-IMAGE_EXT = (".jpg", ".jpeg", ".png", ".bmp", ".heic")
-MAGIC_EXT = ".heic"
+@dataclass(frozen=True)
+class _consts:
+  version = "0.1.2"
+  ext = (".jpg", ".jpeg", ".png", ".bmp", ".heic")
 
-FT_PNG = b"\x89PNG\r\n\x1a\n"
-FT_HEIC = b"ftypheic"
+  type_png = b"\x89PNG\r\n\x1a\n"
+  type_heic = b"ftypheic"
 
-S_SOI = b"\xff\xd8"
-S_EOI = b"\xff\xd9"
-S_ICC = b"\xff\xe0"
-S_APP1 = b"\xff\xe1"
-S_DQT = b"\xff\xdb"
-S_DHT = b"\xff\xc4"
-S_DCT = b"\xff\xc0"
-S_SOS = b"\xff\xda"
-S_DRI = b"\xff\xdd"
-S_COM = b"\xff\xfe"
-S_APP1410 = b"Exif\x00\x00"
-S_APP100 = b"\xff\xe1\x00\x00"
+  bytes_image_start = b"\xff\xd8"
+  bytes_image_end = b"\xff\xd9"
+  bytes_app0 = b"\xff\xe0"
+  bytes_app1 = b"\xff\xe1"
+  bytes_app2 = b"\xff\xe2"
 
-TP_EXIF = 0x8769
-TP_GPS = 0x8825
+  bytes_quantization = b"\xff\xdb"
+  bytes_huffman = b"\xff\xc4"
+  bytes_frame_start = b"\xff\xc0"
+  bytes_scan_start = b"\xff\xda"
+  bytes_interoperability = b"\xff\xdd"
+  bytes_comment = b"\xff\xfe"
 
-VERSION = "0.1.1"
+  bytes_app1_blank = b"\xff\xe1\x00\x00"
+  bytes_app1_add = b"Exif\x00\x00"
+
+  pointer_exif = 0x8769
+  pointer_gps = 0x8825
+
+  width_optimized = 1080
+  width_thumbnail = 352
+
+  datetime_formatter = "%Y:%m:%d %H:%M:%S"
+  epoch = datetime.fromtimestamp(0, tz=UTC)
+
+  types = {
+    1: 1,  # BYTE
+    2: 1,  # ASCII
+    3: 2,  # SHORT
+    4: 4,  # LONG
+    5: 8,  # RATIONAL (2 LONGs)
+    7: 1,  # UNDEFINED
+    9: 4,  # SLONG
+    10: 8,  # SRATIONAL
+  }
 
 
-class Tag(Enum):
+@dataclass(frozen=True)
+class _tags:
   Maker = "Maker"
   Model = "Model"
   Orientation = "Orientation"
@@ -65,51 +86,37 @@ class Tag(Enum):
   # JPEGFormatLength = "JPEGFormatLength"
 
 
+Tag = _tags()
+Consts = _consts()
+
 T_IFD = {
-  0x010F: Tag.Maker.value,
-  0x0110: Tag.Model.value,
-  0x0112: Tag.Orientation.value,
-  0x0132: Tag.DateTime.value,
-  0x8769: Tag.ExifIDF.value,
-  0x8825: Tag.GPSInfoIDF.value,
+  0x010F: Tag.Maker,
+  0x0110: Tag.Model,
+  0x0112: Tag.Orientation,
+  0x0132: Tag.DateTime,
+  0x8769: Tag.ExifIDF,
+  0x8825: Tag.GPSInfoIDF,
 }
 
 T_EXIF = {
-  # 0x9000: Tag.Version.value,
-  0x9003: Tag.DateTimeOriginal.value,
-  0x9286: Tag.UserComment.value,
+  0x9000: Tag.Version,
+  0x9003: Tag.DateTimeOriginal,
+  0x9286: Tag.UserComment,
 }
 
 T_GPS = {
-  0x0001: Tag.GPSLatitudeRef.value,
-  0x0002: Tag.GPSLatitude.value,
-  0x0003: Tag.GPSLongitudeRef.value,
-  0x0004: Tag.GPSLongitude.value,
-  0x0007: Tag.GPSTimeStamp.value,
-  0x001D: Tag.GPSDateStamp.value,
+  0x0001: Tag.GPSLatitudeRef,
+  0x0002: Tag.GPSLatitude,
+  0x0003: Tag.GPSLongitudeRef,
+  0x0004: Tag.GPSLongitude,
+  0x0007: Tag.GPSTimeStamp,
+  0x001D: Tag.GPSDateStamp,
 }
 
 # T_TN = {
 #   0x0201: Tag.JPEGFormat.value,
 #   0x0202: Tag.JPEGFormatLength.value,
 # }
-
-TYPE_SIZES = {
-  1: 1,  # BYTE
-  2: 1,  # ASCII
-  3: 2,  # SHORT
-  4: 4,  # LONG
-  5: 8,  # RATIONAL (2 LONGs)
-  7: 1,  # UNDEFINED
-  9: 4,  # SLONG
-  10: 8,  # SRATIONAL
-}
-
-OPTIMIZE_WIDTH = 1080
-THUMBNAIL_WIDTH = 352
-
-DATETIME_STR_FORMAT = "%Y:%m:%d %H:%M:%S"
-EPOCH = datetime.fromtimestamp(0, tz=UTC)
 
 
 def _check():
@@ -124,7 +131,7 @@ def _str2ts(str):
   ts = -1
 
   try:
-    ts = int(datetime.strptime(str, DATETIME_STR_FORMAT).timestamp())
+    ts = int(datetime.strptime(str, Consts.datetime_formatter).timestamp())
   except Exception:
     pass
 
@@ -135,7 +142,7 @@ def _str2dt(str):
   d = None
 
   try:
-    d = datetime.strptime(str, DATETIME_STR_FORMAT)
+    d = datetime.strptime(str, Consts.datetime_formatter)
   except Exception:
     pass
 
@@ -143,7 +150,7 @@ def _str2dt(str):
 
 
 def _dt2str(dt):
-  return None if dt is None else dt.strftime(DATETIME_STR_FORMAT)
+  return None if dt is None else dt.strftime(Consts.datetime_formatter)
 
 
 def _gpsDT(d, t, offset=8):
@@ -152,6 +159,34 @@ def _gpsDT(d, t, offset=8):
   if d is not None:
     utc = d.replace(tzinfo=timezone.utc)
     return utc.astimezone(timezone(timedelta(hours=offset)))
+
+
+def _get(obj, key, default=None):
+  return obj[key] if obj and key in obj else default
+
+
+def _get_sub(obj, key, sub="value", default=None):
+  value = default
+
+  try:
+    value = obj[key][sub]
+  except Exception:
+    pass
+
+  return value
+
+
+def _deg(values, ref):
+  if values is None or ref is None:
+    return None
+
+  d, m, s = values
+  deg = d + m / 60.0 + s / 3600.0
+
+  if ref in [b"S", b"W"]:
+    deg = -deg
+
+  return deg
 
 
 def _pack(fmt, value, endian="M"):
@@ -164,232 +199,184 @@ def _unpack(fmt, data, endian="M"):
   return struct.unpack(prefix + fmt, data)
 
 
-def _sof(data):
-  precision = data[0]
-  height = _unpack("H", data[1:3])[0]
-  width = _unpack("H", data[3:5])[0]
+def _gen_box(data, offset=0):
+  box = {}
 
-  nf = data[5]
-  components = []
-  pos = 6
+  if not data:
+    return box
 
-  for _ in range(nf):
-    cid = data[pos]
-    hv = data[pos + 1]
-    tq = data[pos + 2]
-    h, v = hv >> 4, hv & 0x0F
-    components.append({"id": cid, "H": h, "V": v, "Tq": tq})
-    pos += 3
+  if offset > 0:
+    data = data[offset:]
 
-  return {
-    "precision": precision,
-    "width": width,
-    "height": height,
-    "components": components,
-  }
+  off = 0
+  length = len(data)
+  while off + 8 <= length:
+    s, t = _unpack("I4s", data[off : off + 8])
 
+    try:
+      type = t.rstrip(b"\x00").decode("utf-8", errors="replace")
 
-def _box(f):
-  start = f.tell()
-  header = f.read(8)
-  if len(header) < 8:
-    return None, None, None
+      if type in box:
+        if not isinstance(box[type], list):
+          first = box[type]
+          box[type] = []
+          box[type].append(first)
 
-  size, box_type = struct.unpack(">I4s", header)
-  return size, box_type.decode("utf-8"), start
+        box[type].append(data[off : off + s])
+      else:
+        box[type] = data[off : off + s]
 
+      if "meta" == type:
+        break
 
-def _find_box(f, target, parent_end=None):
-  while True:
-    pos = f.tell()
-    if parent_end and pos >= parent_end:
-      return (None, None)
+    except Exception:
+      break
 
-    size, box_type, start = _box(f)
-    # print(f"find: {start}, {size}, {box_type}")
+    off += s
 
-    if not size:
-      return (None, None)
-
-    if box_type == target:
-      return (start, size)
-
-    f.seek(start + size)
+  return box
 
 
-def _uint(f, size):
-  if size == 0:
-    return 0
+def _get_heic_wh(iprp):
+  items = _gen_box(iprp, 8)
+  # _dump_items(items, ".iprp")
 
-  return int.from_bytes(f.read(size))
+  ipco = _get(items, "ipco")
+  items = _gen_box(ipco, 8)
+  # _dump_items(items, ".ipco")
+
+  ispe = _get(items, "ispe")
+  if ispe and len(ispe) >= 2:
+    w, h = _unpack("II", ispe[0][12:])
+    width, height = _unpack("II", ispe[1][12:])
+
+  return w, h, width, height
 
 
-def _find_iloc(f, iloc_start, iloc_size, exif_item_id):
-  f.seek(iloc_start + 8)  # 跳过 header
-  version = f.read(1)[0]
-  f.read(3)  # flags
+def _heic_exif_range(iinf, iloc):
+  index = -1
+  if not iinf or len(iinf) < 20 or not iloc or len(iloc) < 20:
+    return -1, -1
 
-  tmp = f.read(2)
-  offset_size = tmp[0] >> 4
-  length_size = tmp[0] & 0xF
-  base_offset_size = tmp[1] >> 4
-  index_size = tmp[1] & 0xF if version in (1, 2) else 0
+  iinf_items = _gen_box(iinf[12 + 2 :])
+  infe = _get(iinf_items, "infe")
+  if infe and isinstance(infe, list):
+    for i in range(len(infe)):
+      if infe[i][16:20] == b"Exif":
+        index = _unpack("H", infe[i][12:14])[0]
+        break
 
+  if index == -1:
+    return -1, -1
+
+  pos = 8
+  version = int(iloc[pos])
+
+  pos += 1 + 3
+  length = iloc[pos] >> 4
+  base_offset_size = iloc[pos + 1] >> 4
+  index_size = base_offset_size if version <= 2 else 0
+
+  pos += 2
   if version < 2:
-    item_count = struct.unpack(">H", f.read(2))[0]
+    count = _unpack("H", iloc[pos : pos + 2])[0]
+    pos += 2
   else:
-    item_count = struct.unpack(">I", f.read(4))[0]
+    count = _unpack("I", iloc[pos : pos + 4])[0]
+    pos += 4
 
-  # ilocList = []
-
-  for _ in range(item_count):
+  for _ in range(count):
     if version < 2:
-      item_id = struct.unpack(">H", f.read(2))[0]
+      iid = _unpack("H", iloc[pos : pos + 2])[0]
+      pos += 2
     else:
-      item_id = struct.unpack(">I", f.read(4))[0]
+      iid = _unpack("I", iloc[pos : pos + 4])[0]
+      pos += 4
 
-    f.read(4)
-    # construction_method = struct.unpack(">H", f.read(2))[0] & 0x0FFF
-    # data_reference_index = struct.unpack(">H", f.read(2))[0]
-
-    base_offset = _uint(f, base_offset_size)
-    extent_count = struct.unpack(">H", f.read(2))[0]
+    pos += 4
+    base_offset = int.from_bytes(iloc[pos : pos + base_offset_size])
+    pos += base_offset_size
+    extent_count = _unpack("H", iloc[pos : pos + 2])[0]
+    pos += 2
 
     for _ in range(extent_count):
-      if index_size > 0:
-        _ = _uint(f, index_size)  # extent_index
-      extent_offset = _uint(f, offset_size)
-      extent_length = _uint(f, length_size)
+      if iid == index:
+        pos += index_size
+        extend_offset = _unpack("I", iloc[pos : pos + length])[0]
+        pos += length
+        extend_length = _unpack("I", iloc[pos : pos + length])[0]
+        pos += length
 
-      if item_id == exif_item_id:
-        return base_offset + extent_offset, extent_length
-      # ilocList.append((base_offset + extent_offset, extent_length))
+        start = base_offset + extend_offset + 4
+        return start, start + extend_length
+      else:
+        pos += index_size + length + length
 
-  # return ilocList
-  return None, None
-
-
-def _from_heic(file):
-  with open(file, "rb") as f:
-    meta_pos = _find_box(f, "meta")
-    if not meta_pos:
-      print("No meta box found.")
-      return
-    meta_start, meta_size = meta_pos
-    f.seek(meta_start + 12)
-
-    iinf_start, iinf_size = _find_box(f, "iinf", meta_start + meta_size)
-    if not iinf_start:
-      print("No iinf.")
-      return
-
-    f.seek(iinf_start + 12)
-    entry_count = struct.unpack(">H", f.read(2))[0]
-
-    exif_item_id = None
-    for _ in range(entry_count):
-      size, box_type, start = _box(f)
-      if box_type == "infe":
-        version = f.read(1)[0]
-        f.read(3)  # flags
-        if version >= 2:
-          item_id = struct.unpack(">H", f.read(2))[0]
-          f.read(2)  # protection
-          item_type = f.read(4).decode("utf-8")
-          if item_type == "Exif":
-            exif_item_id = item_id
-            break
-      f.seek(start + size)
-
-    if not exif_item_id:
-      print("No Exif item in iinf.")
-      return
-
-    f.seek(meta_start + 12)
-    iloc_start, iloc_size = _find_box(f, "iloc", meta_start + meta_size)
-    if not iloc_start:
-      print("No iloc.")
-      return
-
-    exif_offset, exif_length = _find_iloc(f, iloc_start, iloc_size, exif_item_id)
-    if not exif_offset:
-      print("No Exif offset found in iloc.")
-      return
-
-    f.seek(0)
-    mdat_start, _ = _find_box(f, "mdat")
-    if not mdat_start:
-      print("No mdat.")
-      return
-
-    f.seek(exif_offset + 4)
-    data = f.read(exif_length)
-
-    return S_APP100 + data
+  return -1, -1
 
 
-def _extract_exif(file):
-  type, _, _ = _gen_shrink_type(file)
-  if type == ".heic":
-    return _from_heic(file)
-
-  with open(file, "rb") as f:
-    data = f.read()
-
-  exif = b""
-  if data[0:2] == S_SOI:
-    head = 2
-
-    while True:
-      prefix = data[head : head + 2]
-      length = _unpack("H", data[head + 2 : head + 4])[0]
-      end = head + 2 + length
-
-      if prefix == S_SOS:
-        break
-
-      elif prefix == S_APP1 and data[head + 4 : head + 10] == S_APP1410:
-        exif = data[head:end]
-        break
-
-      head = end
-      if head >= len(data):
-        break
-
-  return exif
-
-
-def _gen_segments_lite(data):
-  if data is None or data[0:2] != S_SOI:
+def _gen_jpg_segments_lite(data, app1=None):
+  if not data or len(data) < 10 or Consts.bytes_image_start != data[0:2]:
     return []
 
   head = 2
-  segments = [S_SOI]
   ignored = 0
+  app1_added = False
+  segments = [Consts.bytes_image_start]
 
   while True:
-    if data[head : head + 2] == S_SOS:
+    if head + 2 >= len(data):
+      break
+
+    # fixed bytes fill
+    if 0xFF != data[head]:
+      head += 1
+
+      if 0xFF == data[head + 1]:
+        head += 1
+      continue
+
+    prefix = data[head : head + 2]
+
+    if Consts.bytes_scan_start == prefix:
+      if not app1_added:
+        if app1 and len(app1) > 10:
+          segments.append(app1)
+
+      segments.append(_comment_seg(f"nt25.ex.{Consts.version}"))
       segments.append(data[head:])
       break
+
     else:
-      prefix = data[head : head + 2]
       length = _unpack("H", data[head + 2 : head + 4])[0]
       end = head + 2 + length
 
-      if prefix in (S_DQT, S_DHT, S_DCT, S_DRI):
+      if prefix in (
+        Consts.bytes_quantization,
+        Consts.bytes_huffman,
+        Consts.bytes_interoperability,
+        Consts.bytes_frame_start,
+      ):
         segments.append(data[head:end])
 
-      elif prefix == S_APP1 and data[head + 4 : head + 10] == S_APP1410:
-        segments.append(data[head:end])
+      elif (
+        Consts.bytes_app1 == prefix
+        and Consts.bytes_app1_add == data[head + 4 : head + 10]
+      ):
+        if app1:
+          app1_added = True
+
+          if len(app1) > 10:
+            segments.append(app1)
+
+        else:
+          segments.append(data[head:end])
 
       else:
         ignored += 1
         pass
 
       head = end
-
-    if head >= len(data):
-      break
 
   return segments
 
@@ -404,7 +391,7 @@ def _ifd(data, start, endian, offset, match):
     tag, typ, count = _unpack("HHI", d[:8], endian)
     _data = d[8:12]
 
-    type_size = TYPE_SIZES.get(typ, 1)
+    type_size = Consts.types.get(typ, 1)
     data_len = type_size * count
     if data_len <= 4:
       bytes = _data[:data_len]
@@ -491,7 +478,7 @@ def _gen_ifd(tags, endian, offset):
     raw = info["raw"]
     prefix = info["prefix"]
 
-    type_size = TYPE_SIZES.get(typ, 1)
+    type_size = Consts.types.get(typ, 1)
     data_len = type_size * count
 
     if data_len <= 4:
@@ -510,53 +497,19 @@ def _gen_ifd(tags, endian, offset):
   return bytearray(num + b"".join(entries) + next + data)
 
 
-def _get(entry, tag: Tag, default=None):
-  value = default
-
-  try:
-    value = entry[tag.value]["value"]
-  except Exception:
-    pass
-
-  return value
-
-
-def _val(entry):
-  if not entry:
-    return None
-
-  try:
-    return _unpack("I", entry["raw"][:4], entry["endian"])[0]
-  except Exception:
-    return None
-
-
-def _deg(values, ref):
-  if values is None or ref is None:
-    return None
-
-  d, m, s = values
-  deg = d + m / 60.0 + s / 3600.0
-
-  if ref in [b"S", b"W"]:
-    deg = -deg
-
-  return deg
-
-
 def _parse_exif(data):
   result = {"ifd": {}, "exif": {}, "gps": {}, "tn": {}}
   cursor = 0
 
-  if data is None or len(data) < 4:
+  if data is None or len(data) < 10:
     return result
 
-  if len(data) >= 4 and data[:2] == S_APP1:
+  if len(data) >= 4 and Consts.bytes_app1 == data[:2]:
     cursor = 4
     # exifLength = _unpack("H", data[2:4], endian="M")[0]
     # print(f"exif length = {exifLength}, data.len = {len(data)}")
 
-  if data[cursor : cursor + 6] != S_APP1410:
+  if Consts.bytes_app1_add != data[cursor : cursor + 6]:
     return result
 
   cursor += 6
@@ -587,15 +540,19 @@ def _parse_exif(data):
   #   tag, _ = _ifd(data, start, endian, start + offset, T_TN)
   #   result["tn"] = tag
 
-  offset = _val(ifd0.get(Tag.ExifIDF.value))
-  if offset:
-    tag, _ = _ifd(data, start, endian, start + offset, T_EXIF)
-    result["exif"] = tag
+  if Tag.ExifIDF in ifd0:
+    pointer = ifd0[Tag.ExifIDF]["raw"]
+    offset = _unpack("I", pointer[:4], endian)[0]
+    if offset > 0:
+      tag, _ = _ifd(data, start, endian, start + offset, T_EXIF)
+      result["exif"] = tag
 
-  offset = _val(ifd0.get(Tag.GPSInfoIDF.value))
-  if offset:
-    tag, _ = _ifd(data, start, endian, start + offset, T_GPS)
-    result["gps"] = tag
+  if Tag.GPSInfoIDF in ifd0:
+    pointer = ifd0[Tag.GPSInfoIDF]["raw"]
+    offset = _unpack("I", pointer[:4], endian)[0]
+    if offset > 0:
+      tag, _ = _ifd(data, start, endian, start + offset, T_GPS)
+      result["gps"] = tag
 
   return result
 
@@ -603,16 +560,25 @@ def _parse_exif(data):
 def _exif2json(exif):
   result = {}
 
-  result["maker"] = _get(exif["ifd"], Tag.Maker)
-  result["model"] = _get(exif["ifd"], Tag.Model)
+  result["maker"] = _get_sub(exif["ifd"], Tag.Maker)
+  result["model"] = _get_sub(exif["ifd"], Tag.Model)
 
-  result["orientation"] = _get(exif["ifd"], Tag.Orientation)
-  modify = _get(exif["ifd"], Tag.DateTime)
+  orientation = _get_sub(exif["ifd"], Tag.Orientation)
+  if orientation:
+    result["orientation"] = orientation
+
+  try:
+    raw = exif["exif"][Tag.Version]["raw"]
+    v = raw.decode("utf-8")
+    result["exif.version"] = f"{int(v[:2])}.{int(v[2:].rstrip('0') or '0')}"
+  except Exception:
+    pass
 
   # comment = _get(exif["exif"], Tag.UserComment)
   # result["comment"] = comment
 
-  create = _get(exif["exif"], Tag.DateTimeOriginal)
+  modify = _get_sub(exif["ifd"], Tag.DateTime)
+  create = _get_sub(exif["exif"], Tag.DateTimeOriginal)
 
   createDT = _str2dt(create)
   modifyDT = _str2dt(modify)
@@ -620,16 +586,16 @@ def _exif2json(exif):
   result["datetime.create"] = _dt2str(createDT)
   result["datetime.modify"] = _dt2str(modifyDT)
 
-  lat = _get(exif["gps"], Tag.GPSLatitude)
-  lat_ref = _get(exif["gps"], Tag.GPSLatitudeRef)
-  lon = _get(exif["gps"], Tag.GPSLongitude)
-  lon_ref = _get(exif["gps"], Tag.GPSLongitudeRef)
+  lat = _get_sub(exif["gps"], Tag.GPSLatitude)
+  lat_ref = _get_sub(exif["gps"], Tag.GPSLatitudeRef)
+  lon = _get_sub(exif["gps"], Tag.GPSLongitude)
+  lon_ref = _get_sub(exif["gps"], Tag.GPSLongitudeRef)
 
   result["latitude"] = _deg(lat, lat_ref)
   result["longitude"] = _deg(lon, lon_ref)
 
-  gpsDate = _get(exif["gps"], Tag.GPSDateStamp)
-  gpsTime = _get(exif["gps"], Tag.GPSTimeStamp)
+  gpsDate = _get_sub(exif["gps"], Tag.GPSDateStamp)
+  gpsTime = _get_sub(exif["gps"], Tag.GPSTimeStamp)
 
   gpsTs = -1
   if gpsDate is not None and gpsTime is not None:
@@ -648,12 +614,12 @@ def _exif2json(exif):
   if createTs > 0:
     offset = int(max(modifyTs, gpsTs) - createTs)
     result["offset"] = offset
-    result["offsetDelta"] = str(datetime.fromtimestamp(offset, tz=UTC) - EPOCH)
+    result["offsetDelta"] = str(datetime.fromtimestamp(offset, tz=UTC) - Consts.epoch)
 
   return result
 
 
-def _find_pf(data, tag, endian):
+def _find_ifd_tag(data, tag, endian):
   index = -1
 
   if data and len(data) > 14:
@@ -670,33 +636,11 @@ def _find_pf(data, tag, endian):
   return index
 
 
-def _gen_string(comment, enc):
-  cb = comment.encode(enc)
-  length = len(cb) + 2
-  return length.to_bytes(2) + cb
+def _gen_exif_lite(data, removeOrientation=True):
+  if not data or len(data) < 10:
+    return b""
 
-
-def _comment(segments, comment, enc="utf-8"):
-  contains = False
-
-  if len(segments) > 1:
-    cb = S_COM + _gen_string(comment, enc)
-
-    for i in range(len(segments)):
-      if segments[i][0:2] == S_COM:
-        segments[i] = cb
-        contains = True
-        break
-
-    if not contains:
-      length = len(segments)
-      segments.insert(1 if length == 2 else length - 2, cb)
-
-  return segments
-
-
-def _gen_exif_lite(seg, removeOrientation=True):
-  app1 = _parse_exif(seg)
+  app1 = _parse_exif(data)
 
   ifd = app1["ifd"]
   exif = app1["exif"]
@@ -710,19 +654,19 @@ def _gen_exif_lite(seg, removeOrientation=True):
   #     # [TODO] shrink image end
   #     f.write(seg[offset + 10 : length])
 
-  app1Bytes = bytearray(seg[: 10 + 2 + 2])
-  endian = "I" if seg[10:12] == b"II" else "M"
+  app1Bytes = bytearray(data[: 10 + 2 + 2])
+  endian = "I" if data[10:12] == b"II" else "M"
   app1Bytes += _pack("I", (8,), endian)
 
   offset = 8
-  if removeOrientation and Tag.Orientation.value in ifd:
-    del ifd[Tag.Orientation.value]
+  if removeOrientation and Tag.Orientation in ifd:
+    del ifd[Tag.Orientation]
 
   ifdBytes = _gen_ifd(ifd, endian, offset)
 
   exifBytes = bytearray()
-  if Tag.ExifIDF.value in ifd:
-    index = _find_pf(ifdBytes, TP_EXIF, endian)
+  if Tag.ExifIDF in ifd:
+    index = _find_ifd_tag(ifdBytes, Consts.pointer_exif, endian)
     if index > 0:
       offset = 8 + len(ifdBytes)
       lengthBytes = _pack("I", (offset,), endian)
@@ -731,23 +675,23 @@ def _gen_exif_lite(seg, removeOrientation=True):
       ifdBytes[index + 2] = lengthBytes[2]
       ifdBytes[index + 3] = lengthBytes[3]
 
-      if Tag.UserComment.value in exif:
-        cv = "nt25..."
-        raw = cv.encode("utf-8")
-        count = len(raw)
+      if Tag.UserComment in exif:
+        # cv = f"nt25.ex"
+        # raw = cv.encode("utf-8")
+        # count = len(raw)
 
-        c = exif[Tag.UserComment.value]
-        c["value"] = cv
-        c["raw"] = raw
-        c["count"] = count
-        c["prefix"] = c["prefix"][:4] + _pack("I", (count,), endian)
-        # del exif[Tag.UserComment.value]
+        # c = exif[Tag.UserComment]
+        # c["value"] = cv
+        # c["raw"] = raw
+        # c["count"] = count
+        # c["prefix"] = c["prefix"][:4] + _pack("I", (count,), endian)
+        del exif[Tag.UserComment]
 
       exifBytes = _gen_ifd(exif, endian, offset)
 
   gpsBytes = bytearray()
-  if Tag.GPSInfoIDF.value in ifd:
-    index = _find_pf(ifdBytes, TP_GPS, endian)
+  if Tag.GPSInfoIDF in ifd:
+    index = _find_ifd_tag(ifdBytes, Consts.pointer_gps, endian)
     if index > 0:
       offset = 8 + len(ifdBytes) + len(exifBytes)
       lengthBytes = _pack("I", (offset,), endian)
@@ -772,8 +716,8 @@ def parseExif(file):
   if not os.path.isfile(file):
     return result
 
-  exif = _extract_exif(file)
-  app1 = _parse_exif(exif)
+  info = _file(file)
+  app1 = _parse_exif(_get(info, "exif"))
   result = _exif2json(app1)
   return result
 
@@ -781,122 +725,96 @@ def parseExif(file):
 def mergeExif(exif, to, removeOrientation=True):
   result = False
 
-  if not exif or len(exif) < 4:
-    return result
-
   exif = _gen_exif_lite(exif, removeOrientation)
   with open(to, "rb") as f:
     data = f.read()
 
-  segments = _gen_segments_lite(data)
-
-  if len(segments) > 1:
-    segmentLite = []
-    for seg in segments:
-      prefix = seg[0:2]
-
-      if prefix in (S_SOS, S_DQT, S_DHT, S_DCT, S_DRI):
-        segmentLite.append(seg)
-
-      elif prefix == S_SOI:
-        segmentLite.append(seg)
-
-        if len(exif) > 0:
-          segmentLite.append(exif)
-
+  segments = _gen_jpg_segments_lite(data, exif)
+  if len(segments) > 2:
     with open(to, "wb") as f:
-      f.write(b"".join(segmentLite))
+      s = b"".join(segments)
+      f.write(s)
       result = True
 
   return result
 
 
-def genComment(file):
-  result = False
-
-  if not os.path.isfile(file):
-    return result
-
-  with open(file, "rb") as f:
-    data = f.read()
-
-  segments = _gen_segments_lite(data)
-  if len(segments) > 1:
-    _comment(segments, "nt25.ex")
-    with open(file, "wb") as f:
-      f.write(b"".join(segments))
-      result = True
-
-  return result
+def _comment_seg(comment, enc="utf-8"):
+  cb = comment.encode(enc)
+  length = len(cb) + 2
+  return Consts.bytes_comment + length.to_bytes(2) + cb
 
 
-def get_heic_size(filename):
-  with open(filename, "rb") as f:
-    # 找 meta box
-    meta_pos = _find_box(f, "meta")
-    if not meta_pos:
-      raise ValueError("No meta box found")
-    meta_start, meta_size = meta_pos
-    f.seek(meta_start + 12)  # skip fullbox header
+def _file(file):
+  result = {}
 
-    # 找 iprp (ItemPropertiesBox)
-    iprp_pos = _find_box(f, "iprp", meta_start + meta_size)
-    if not iprp_pos:
-      raise ValueError("No iprp box found")
-    iprp_start, iprp_size = iprp_pos
-
-    # 找 ipco (ItemPropertyContainerBox)
-    f.seek(iprp_start + 8)
-    ipco_pos = _find_box(f, "ipco", iprp_start + iprp_size)
-    if not ipco_pos:
-      raise ValueError("No ipco box found")
-    ipco_start, ipco_size = ipco_pos
-
-    # 遍历 ipco 里的 box，找 ispe
-    f.seek(ipco_start + 8)
-    while f.tell() < ipco_start + ipco_size:
-      size, box_type, start = _box(f)
-      if not size:
-        break
-      if box_type == "ispe":
-        f.seek(start + 12)  # 跳过 FullBox header
-        width = struct.unpack(">I", f.read(4))[0]
-        height = struct.unpack(">I", f.read(4))[0]
-        print(width, height)
-
-      f.seek(start + size)
-
-
-def _gen_shrink_type(file):
-  type = "null"
+  type = None
   width = -1
   height = -1
 
   with open(file, "rb") as f:
     header = f.read(16)
 
-    if header[:2] == S_SOI:
+    if Consts.bytes_image_start == header[:2]:
       type = ".jpg"
 
       f.seek(0)
       data = f.read()
 
-      i = 2
-      while i < len(data):
-        if S_SOS == data[i : i + 2]:
+      head = 2
+      while True:
+        if head + 2 >= len(data):
           break
 
-        length = _unpack("H", data[i + 2 : i + 4])[0]
-        if S_DCT == data[i : i + 2]:
-          height, width = _unpack("HH", data[i + 5 : i + 9])
+        # fixed bytes fill
+        if 0xFF != data[head]:
+          head += 1
+
+          if 0xFF == data[head + 1]:
+            head += 1
+          continue
+
+        prefix = data[head : head + 2]
+        length = _unpack("H", data[head + 2 : head + 4])[0]
+        end = head + 2 + length
+
+        if Consts.bytes_scan_start == prefix:
           break
 
-        i += 2 + length
+        elif Consts.bytes_frame_start == prefix:
+          height, width = _unpack("HH", data[head + 5 : head + 9])
 
-    elif header[4:12] == FT_HEIC:
+        elif (
+          Consts.bytes_app1 == prefix
+          and Consts.bytes_app1_add == data[head + 4 : head + 10]
+        ):
+          result["exif"] = data[head:end]
+
+        if "exif" in result and height > 0 and width > 0:
+          break
+
+        head = end
+
+    elif Consts.type_heic == header[4:12]:
       type = ".heic"
+      f.seek(0)
+      data = f.read()
 
-    elif header.startswith(FT_PNG):
+      box = _gen_box(data)
+      meta = _get(box, "meta")
+      items = _gen_box(meta, 12)
+
+      iprp = _get(items, "iprp")
+      w, h, width, height = _get_heic_wh(iprp)
+      result["rows"] = int(ceil(width / w))
+      result["cols"] = int(ceil(height / h))
+
+      iinf = _get(items, "iinf")
+      iloc = _get(items, "iloc")
+      exif_start, exif_offset = _heic_exif_range(iinf, iloc)
+      result["exif"] = Consts.bytes_app1_blank + data[exif_start:exif_offset]
+
+    elif header.startswith(Consts.type_png):
       f.seek(16)
       width, height = _unpack("II", f.read(8))
 
@@ -908,152 +826,24 @@ def _gen_shrink_type(file):
       type = ".bmp.jpg"
       width, height = _unpack("II", f.read(8), "I")
 
-  return type, width, height
+  result["type"] = type
+  result["width"] = width
+  result["height"] = height
 
-
-def getWH(file: str) -> tuple[str, int, int]:
-  with open(file, "rb") as f:
-    header = f.read(16)
-
-    type = "null"
-    height = -1
-    width = -1
-
-    if header.startswith(S_SOI):
-      f.seek(0)
-      data = f.read()
-
-      i = 2
-      while i < len(data):
-        (marker,) = _unpack("H", data[i : i + 2])
-        (block,) = _unpack("H", data[i + 2 : i + 4])
-
-        if 0xFFC0 == marker:
-          type = ".jpg"
-          height, width = _unpack("HH", data[i + 5 : i + 9])
-          break
-
-        i += 2 + block
-
-    elif header.startswith(b"\x89PNG\r\n\x1a\n"):
-      f.seek(16)
-      type = ".png"
-      width, height = _unpack("II", f.read(8))
-
-      typ = f.read(2)
-      if typ[1] <= 2:
-        type = ".png.jpg"
-
-    elif header.startswith(b"GIF87a") or header.startswith(b"GIF89a"):
-      f.seek(6)
-      type = ".gif"
-      width, height = _unpack("HH", f.read(4), "I")
-
-    elif header.startswith(b"BM"):
-      f.seek(18)
-      type = ".bmp.jpg"
-      width, height = _unpack("II", f.read(8), "I")
-
-    elif header.startswith(b"II") or header.startswith(b"MM"):
-      f.seek(0)
-      endian = "I" if header.startswith(b"II") else "M"
-      version = _unpack("H", header[2:4], endian)[0]
-
-      offset = 0
-      if version == 42:  # ClassicTIFF
-        offset_size = 4
-        entry_size = 12
-
-        f.seek(4)
-        offset = _unpack("I", f.read(4), endian)[0]
-
-        def parse(offset):
-          f.seek(offset)
-
-          entries = []
-          count = _unpack("H", f.read(2), endian)[0]
-          for _ in range(count):
-            raw = f.read(entry_size)
-            tag, typ, count, value = _unpack("HHII", raw, endian)
-            entries.append((tag, typ, count, value))
-
-          next = _unpack("I", f.read(4), endian)[0]
-          return entries, next
-
-      elif version == 43:  # BigTIFF
-        offset_size = _unpack("H", header[4:6], endian)[0]
-        if offset_size == 8:
-          entry_size = 20
-          offset = _unpack("Q", header[8:16], endian)[0]
-
-          def parse(offset):
-            f.seek(offset)
-
-            entries = []
-            count = _unpack("Q", f.read(8), endian)[0]
-
-            for _ in range(count):
-              raw = f.read(entry_size)
-              tag, typ = _unpack("HH", raw[:4], endian)
-              count = _unpack("Q", raw[4:12], endian)[0]
-              value = _unpack("Q", raw[12:20], endian)[0]
-              entries.append((tag, typ, count, value))
-
-            next = _unpack(endian + "Q", f.read(8), endian)[0]
-            return entries, next
-
-      while offset != 0:
-        entries, offset = parse(offset)
-
-        for tag, typ, count, value in entries:
-          if tag == 256:
-            width = int(value)
-          elif tag == 257:
-            height = int(value)
-
-        if width > 0 and height > 0:
-          type = ".tiff"
-          break
-
-    elif header[0:4] == b"RIFF" and header[8:12] == b"WEBP":
-      f.seek(0)
-      # [TODO] check big or little
-      riff, size, webp = _unpack("4sI4s", f.read(12))
-
-      if riff == b"RIFF" and webp == b"WEBP":
-        type = ".webp"
-        chunk_header = f.read(4)
-        if chunk_header == b"VP8X":
-          f.seek(8, 1)
-          wb, hb = _unpack("3s3s", f.read(6), "I")
-          width = int.from_bytes(wb, "little") + 1
-          height = int.from_bytes(hb, "little") + 1
-
-        elif chunk_header == b"VP8L":
-          f.seek(5, 1)
-          b = f.read(4)
-          width = 1 + (((b[1] & 0x3F) << 8) | b[0])
-          height = 1 + (((b[3] & 0xF) << 10) | (b[2] << 2) | ((b[1] & 0xC0) >> 6))
-
-        elif chunk_header == b"VP8 ":
-          f.seek(10, 1)
-          width, height = _unpack("HH", f.read(4), "I")
-          width &= 0x3FFF
-          height &= 0x3FFF
-
-        else:
-          type = "null"
-          height = -1
-          width = -1
-
-  return (type, height, width)
+  return result
 
 
 def _shrink(file, output, maxWidth=None, merge=True, magic=False):
   shrink = False
 
-  type, w, h = _gen_shrink_type(file)
-  if type == "null":
+  info = _file(file)
+  type = _get(info, "type")
+  w = _get(info, "width", -1)
+  h = _get(info, "height", -1)
+  r = _get(info, "rows", -1)
+  c = _get(info, "cols", -1)
+
+  if not type:
     return shrink
 
   if magic:
@@ -1064,31 +854,47 @@ def _shrink(file, output, maxWidth=None, merge=True, magic=False):
     shell = ["ffmpeg", "-i", path]
 
     if type == ".heic":
+      if r < 0 or c < 0:
+        return shrink
+
       shell += ["-map", "0", "-y", "ex.%03d.jpg"]
       sr = _run(shell)
 
       if sr.returncode != 0:
         print(sr.stderr)
 
-      # [TODO] pick right cols raws in bytes
-      type = ".heic.jpg"
-      shell = ["ffmpeg", "-i", "ex.%03d.jpg", "-vf", "tile=8x6", "-frames:v", "1"]
+      shell = [
+        "ffmpeg",
+        "-i",
+        "ex.%03d.jpg",
+        "-vf",
+        f"tile={r}x{c}",
+        "-frames:v",
+        "1",
+        "-y",
+        "ex.55.jpg",
+      ]
 
-    if maxWidth is not None and w > maxWidth:
+      sr = _run(shell)
+      if sr.returncode != 0:
+        if not os.path.exists("ex.55.jpg"):
+          return shrink
+
+      shell = ["ffmpeg", "-i", "ex.55.jpg", "-vf", f"crop={w}:{h}:0:0"]
+      type = ".heic.jpg"
+
+    if maxWidth and w > maxWidth:
       m = max(w, h)
       if m > maxWidth:
         scale = maxWidth / m
         w = int(ceil(scale * w))
         shell += ["-vf", f"scale={w}:-1"]
 
-    suffix = str(randint(1000, 9999)) + type
+    suffix = str(randint(100, 999)) + type
     ofile = file + suffix
 
     shell += ["-y", path + suffix]
     sr = _run(shell)
-
-    if sr.returncode != 0:
-      print(sr.stderr)
 
     if type.startswith(".heic"):
       for t in glob.glob("ex.*.jpg"):
@@ -1096,6 +902,10 @@ def _shrink(file, output, maxWidth=None, merge=True, magic=False):
           os.remove(t)
         except Exception:
           pass
+
+    if sr.returncode != 0:
+      if not os.path.exists(ofile):
+        return shrink
 
   else:
     img = Image.open(file)
@@ -1122,16 +932,16 @@ def _shrink(file, output, maxWidth=None, merge=True, magic=False):
     img.save(ofile, optimize=True)
     img.close()
 
-  if not os.path.exists(ofile):
-    return shrink
-
-  if type == ".jpg" or type == ".heic.jpg":
-    if merge:
-      exif = _extract_exif(file)
-      mergeExif(exif, ofile, type == ".jpg")
+    if not os.path.exists(ofile):
+      return shrink
 
   if type.endswith(".jpg"):
-    genComment(ofile)
+    if merge:
+      exif = _get(info, "exif")
+    else:
+      exif = b""
+
+    mergeExif(exif, ofile, type == ".jpg")
 
   times = float(os.path.getsize(ofile)) / os.path.getsize(file)
   shrink = times < 1
@@ -1141,14 +951,14 @@ def _shrink(file, output, maxWidth=None, merge=True, magic=False):
   else:
     os.replace(ofile, output)
 
-  print(f" > {output} has shrink {times:.1%}")
+  # print(f" > {output} has shrink {times:.1%}")
   return shrink
 
 
 def shrinkFile(
   file,
-  optimizeWidth=OPTIMIZE_WIDTH,
-  thumbnailWidth=THUMBNAIL_WIDTH,
+  optimizeWidth=Consts.width_optimized,
+  thumbnailWidth=Consts.width_thumbnail,
   override=True,
   magic=False,
 ):
@@ -1158,7 +968,7 @@ def shrinkFile(
     return result
 
   name, ext = os.path.splitext(file)
-  if ext.lower() in MAGIC_EXT:
+  if ext.lower() == ".heic":
     magic = True
 
   if override:
@@ -1167,19 +977,20 @@ def shrinkFile(
     result = _shrink(file, name + "-new" + ext, magic=magic)
     file = name + "-new" + ext
 
-  _shrink(file, name + "-o" + ext, maxWidth=optimizeWidth, merge=False, magic=magic)
-  _shrink(
-    file, name + "-thumbnail" + ext, maxWidth=thumbnailWidth, merge=False, magic=magic
-  )
+  if result:
+    _shrink(file, name + "-o" + ext, maxWidth=optimizeWidth, merge=False, magic=magic)
+    _shrink(
+      file, name + "-thumbnail" + ext, maxWidth=thumbnailWidth, merge=False, magic=magic
+    )
 
   return result
 
 
 def main():
   parser = argparse.ArgumentParser(description="EXIF tool")
+  parser.add_argument("-v", "--version", action="store_true", help="echo version")
   parser.add_argument("-f", "--file", type=str, help="parse image Exif info")
   parser.add_argument("-t", "--to", type=str, help="merge exif to file")
-  parser.add_argument("-v", "--version", action="store_true", help="echo version")
   parser.add_argument(
     "-m",
     "--magic",
@@ -1205,7 +1016,8 @@ def main():
 
   if args.file:
     if args.to:
-      exif = _extract_exif(args.file)
+      info = _file(args.file)
+      exif = _get(info, "exif")
       result = {"merge": mergeExif(exif, args.to)}
     else:
       result = parseExif(args.file)
@@ -1216,7 +1028,7 @@ def main():
       for d, _, f in os.walk(args.shrink):
         for file in f:
           _, e = os.path.splitext(file)
-          if e.lower() in IMAGE_EXT:
+          if e.lower() in Consts.ext:
             files.append(os.path.join(d, file))
 
       shrink = 0
@@ -1239,57 +1051,13 @@ def main():
       }
 
   elif args.version:
-    result = {"version": VERSION, "magic": _check()}
+    result = {"version": Consts.version, "magic": _check()}
   else:
-    print("usage: ex [-h] [-v] [-f FILE] [[-o] [-m] -s FILE]")
+    print("usage: ex [-h] [-v] [-f FILE [-t FILE]] [[-o] [-m] -s FILE]")
     return
 
   print(json.dumps(result, indent=2))
 
 
-def todo(file):
-  with open(file, "rb") as f:
-    data = f.read()
-
-  target = 0
-  while target >= 0:
-    target = data.find(S_APP1410, target + 1)
-    print(target, data[target : target + 20])
-
-
 if __name__ == "__main__":
   main()
-
-# def lite(file, output):
-#   with open(file, "rb") as f:
-#     data = f.read()
-
-#   segmentLite = []
-#   segments = _segments(data)
-
-#   for seg in segments:
-#     prefix = seg[0:2]
-
-#     if prefix in (S_SOI, S_DQT, S_DHT, S_DCT, S_SOS, S_DRI):
-#       segmentLite.append(seg)
-
-#     elif prefix == S_APP1 and seg[4:10] == S_APP1410:
-#       segmentLite.append(_genLiteExif(seg))
-
-#     elif prefix == S_COM:
-#       length = _unpack("H", seg[2:4])[0]
-
-#       try:
-#         comments = seg[4 : length + 4].rstrip(b"\x00").decode("utf-8", errors="replace")
-#         print("comments:", comments)
-#       except Exception:
-#         pass
-
-#     else:
-#       # length = _unpack("H", seg[2:4])
-#       # print("Ignore:", seg[:2], length)
-#       pass
-
-#   _comment(segmentLite, "nt25.ef2")
-#   with open(output, "wb") as f:
-#     f.write(b"".join(segmentLite))
