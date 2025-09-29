@@ -19,7 +19,7 @@ from PIL import Image, ImageOps
 
 @dataclass(frozen=True)
 class _consts:
-  version = "0.1.2"
+  version = "0.1.3"
   ext = (".jpg", ".jpeg", ".png", ".bmp", ".heic")
 
   type_png = b"\x89PNG\r\n\x1a\n"
@@ -324,8 +324,9 @@ def _gen_jpg_segments_lite(data, app1=None):
   app1_added = False
   segments = [Consts.bytes_image_start]
 
+  total = len(data)
   while True:
-    if head + 2 >= len(data):
+    if head + 2 >= total:
       break
 
     # fixed bytes fill
@@ -337,6 +338,8 @@ def _gen_jpg_segments_lite(data, app1=None):
       continue
 
     prefix = data[head : head + 2]
+    length = _unpack("H", data[head + 2 : head + 4])[0]
+    end = head + 2 + length
 
     if Consts.bytes_scan_start == prefix:
       if not app1_added:
@@ -344,14 +347,22 @@ def _gen_jpg_segments_lite(data, app1=None):
           segments.append(app1)
 
       segments.append(_comment_seg(f"nt25.ex.{Consts.version}"))
+
+      # k = end
+      # while k < total - 1:
+      #   if data[k] == 0xFF and data[k + 1] != 0x00:
+      #     k += 2
+      #     break
+      #   k += 1
+      # # almost k == total
+      # segments.append(data[head:k])
+
       segments.append(data[head:])
       break
 
     else:
-      length = _unpack("H", data[head + 2 : head + 4])[0]
-      end = head + 2 + length
-
       if prefix in (
+        Consts.bytes_app2,
         Consts.bytes_quantization,
         Consts.bytes_huffman,
         Consts.bytes_interoperability,
@@ -372,8 +383,14 @@ def _gen_jpg_segments_lite(data, app1=None):
         else:
           segments.append(data[head:end])
 
+      # elif Consts.bytes_comment == prefix:
+      #   print(f"comment: {data[head + 4 : end]}")
+
       else:
         ignored += 1
+
+        # print(f"append: {prefix}, {length}")
+        # segments.append(data[head:end])
         pass
 
       head = end
@@ -851,13 +868,19 @@ def _shrink(file, output, maxWidth=None, merge=True, magic=False):
       return shrink
 
     path = str(Path(file).resolve())
-    shell = ["ffmpeg", "-i", path]
+    shell = ["ffmpeg", "-hide_banner", "-i", path]
 
     if type == ".heic":
       if r < 0 or c < 0:
         return shrink
 
-      shell += ["-map", "0", "-y", "ex.%03d.jpg"]
+      shell += [
+        "-map",
+        "0",
+        "-vf",
+        "eq=brightness=0.05:contrast=1.05:saturation=1.2:gamma=0.9",
+        "ex.%03d.jpg",
+      ]
       sr = _run(shell)
 
       if sr.returncode != 0:
@@ -865,6 +888,7 @@ def _shrink(file, output, maxWidth=None, merge=True, magic=False):
 
       shell = [
         "ffmpeg",
+        "-hide_banner",
         "-i",
         "ex.%03d.jpg",
         "-vf",
@@ -880,7 +904,7 @@ def _shrink(file, output, maxWidth=None, merge=True, magic=False):
         if not os.path.exists("ex.55.jpg"):
           return shrink
 
-      shell = ["ffmpeg", "-i", "ex.55.jpg", "-vf", f"crop={w}:{h}:0:0"]
+      shell = ["ffmpeg", "-hide_banner", "-i", "ex.55.jpg", "-vf", f"crop={w}:{h}:0:0"]
       type = ".heic.jpg"
 
     if maxWidth and w > maxWidth:
@@ -977,11 +1001,10 @@ def shrinkFile(
     result = _shrink(file, name + "-new" + ext, magic=magic)
     file = name + "-new" + ext
 
-  if result:
-    _shrink(file, name + "-o" + ext, maxWidth=optimizeWidth, merge=False, magic=magic)
-    _shrink(
-      file, name + "-thumbnail" + ext, maxWidth=thumbnailWidth, merge=False, magic=magic
-    )
+  _shrink(file, name + "-o" + ext, maxWidth=optimizeWidth, merge=False, magic=magic)
+  _shrink(
+    file, name + "-thumbnail" + ext, maxWidth=thumbnailWidth, merge=False, magic=magic
+  )
 
   return result
 
