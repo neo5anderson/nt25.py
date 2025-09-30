@@ -19,7 +19,7 @@ from PIL import Image, ImageOps
 
 @dataclass(frozen=True)
 class _consts:
-  version = "0.1.3"
+  version = "0.1.4"
   ext = (".jpg", ".jpeg", ".png", ".bmp", ".heic")
 
   type_png = b"\x89PNG\r\n\x1a\n"
@@ -60,6 +60,8 @@ class _consts:
     9: 4,  # SLONG
     10: 8,  # SRATIONAL
   }
+
+  adjust_heic = "eq=brightness=0.05:contrast=1.02:saturation=1.02"
 
 
 @dataclass(frozen=True)
@@ -315,7 +317,7 @@ def _heic_exif_range(iinf, iloc):
   return -1, -1
 
 
-def _gen_jpg_segments_lite(data, app1=None):
+def _gen_jpg_segments_lite(data, app1=None, adjust=None):
   if not data or len(data) < 10 or Consts.bytes_image_start != data[0:2]:
     return []
 
@@ -346,7 +348,12 @@ def _gen_jpg_segments_lite(data, app1=None):
         if app1 and len(app1) > 10:
           segments.append(app1)
 
-      segments.append(_comment_seg(f"nt25.ex.{Consts.version}"))
+      comment = f"nt25.ex.{Consts.version}"
+
+      if adjust:
+        comment += "\n" + "\n".join(adjust.split(","))
+
+      segments.append(_comment_seg(comment))
 
       # k = end
       # while k < total - 1:
@@ -739,14 +746,14 @@ def parseExif(file):
   return result
 
 
-def mergeExif(exif, to, removeOrientation=True):
+def mergeExif(exif, to, removeOrientation=True, adjust=None):
   result = False
 
   exif = _gen_exif_lite(exif, removeOrientation)
   with open(to, "rb") as f:
     data = f.read()
 
-  segments = _gen_jpg_segments_lite(data, exif)
+  segments = _gen_jpg_segments_lite(data, exif, adjust)
   if len(segments) > 2:
     with open(to, "wb") as f:
       s = b"".join(segments)
@@ -850,7 +857,7 @@ def _file(file):
   return result
 
 
-def _shrink(file, output, maxWidth=None, merge=True, magic=False):
+def _shrink(file, output, maxWidth=None, merge=True, magic=False, adjust=None):
   shrink = False
 
   info = _file(file)
@@ -874,37 +881,50 @@ def _shrink(file, output, maxWidth=None, merge=True, magic=False):
       if r < 0 or c < 0:
         return shrink
 
+      if not os.path.exists(".ex"):
+        os.mkdir(".ex")
+
+      tile_file = os.path.join(".", ".ex", "%03d.jpg")
+      merged_file = os.path.join(".", ".ex", "ex.jpg")
+
+      # [TODO] adjust by maker & model
+      # app1 = _parse_exif(_get(info, "exif"))
+      # maker = _get_sub(app1["ifd"], Tag.Maker)
+      # model = _get_sub(app1["ifd"], Tag.Model)
+      # print(f"{maker}, {model}, {adjust}")
+
+      if adjust:
+        shell += ["-vf", adjust]
+
       shell += [
         "-map",
         "0",
-        "-vf",
-        "eq=brightness=0.05:contrast=1.05:saturation=1.2:gamma=0.9",
-        "ex.%03d.jpg",
+        tile_file,
       ]
       sr = _run(shell)
 
       if sr.returncode != 0:
-        print(sr.stderr)
+        return shrink
 
       shell = [
         "ffmpeg",
         "-hide_banner",
         "-i",
-        "ex.%03d.jpg",
+        tile_file,
         "-vf",
         f"tile={r}x{c}",
         "-frames:v",
         "1",
         "-y",
-        "ex.55.jpg",
+        merged_file,
       ]
 
       sr = _run(shell)
       if sr.returncode != 0:
-        if not os.path.exists("ex.55.jpg"):
+        if not os.path.exists(merged_file):
           return shrink
 
-      shell = ["ffmpeg", "-hide_banner", "-i", "ex.55.jpg", "-vf", f"crop={w}:{h}:0:0"]
+      shell = ["ffmpeg", "-hide_banner", "-i", merged_file, "-vf", f"crop={w}:{h}:0:0"]
       type = ".heic.jpg"
 
     if maxWidth and w > maxWidth:
@@ -921,7 +941,7 @@ def _shrink(file, output, maxWidth=None, merge=True, magic=False):
     sr = _run(shell)
 
     if type.startswith(".heic"):
-      for t in glob.glob("ex.*.jpg"):
+      for t in glob.glob(os.path.join(".ex", "*.jpg")):
         try:
           os.remove(t)
         except Exception:
@@ -985,6 +1005,7 @@ def shrinkFile(
   thumbnailWidth=Consts.width_thumbnail,
   override=True,
   magic=False,
+  adjust=None,
 ):
   result = False
 
@@ -996,10 +1017,13 @@ def shrinkFile(
     magic = True
 
   if override:
-    result = _shrink(file, file, magic=magic)
+    result = _shrink(file, file, magic=magic, adjust=adjust)
   else:
-    result = _shrink(file, name + "-new" + ext, magic=magic)
-    file = name + "-new" + ext
+    result = _shrink(file, name + "-new" + ext, magic=magic, adjust=adjust)
+    if result:
+      file = name + "-new" + ext
+    else:
+      return result
 
   _shrink(file, name + "-o" + ext, maxWidth=optimizeWidth, merge=False, magic=magic)
   _shrink(
@@ -1029,6 +1053,13 @@ def main():
     default=False,
   )
   parser.add_argument(
+    "-a",
+    "--adjust",
+    type=str,
+    help="output with adjust arguments",
+    default=None,
+  )
+  parser.add_argument(
     "-s",
     "--shrink",
     type=str,
@@ -1046,6 +1077,9 @@ def main():
       result = parseExif(args.file)
 
   elif args.shrink:
+    if not args.adjust:
+      args.adjust = Consts.adjust_heic
+
     if os.path.isdir(args.shrink):
       files = []
       for d, _, f in os.walk(args.shrink):
@@ -1056,7 +1090,7 @@ def main():
 
       shrink = 0
       for f in files:
-        if shrinkFile(f, override=args.override, magic=args.magic):
+        if shrinkFile(f, override=args.override, magic=args.magic, adjust=args.adjust):
           shrink += 1
 
       result = {
@@ -1064,13 +1098,17 @@ def main():
         "shrink": shrink,
         "override": args.override,
         "magic": args.magic,
+        "adjust": args.adjust,
       }
 
     else:
       result = {
-        "result": shrinkFile(args.shrink, override=args.override, magic=args.magic),
+        "result": shrinkFile(
+          args.shrink, override=args.override, magic=args.magic, adjust=args.adjust
+        ),
         "override": args.override,
         "magic": args.magic,
+        "adjust": args.adjust,
       }
 
   elif args.version:
