@@ -1004,6 +1004,7 @@ def shrinkFile(
   optimizeWidth=Consts.width_optimized,
   thumbnailWidth=Consts.width_thumbnail,
   override=True,
+  only=False,
   magic=False,
   adjust=None,
 ):
@@ -1019,16 +1020,17 @@ def shrinkFile(
   if override:
     result = _shrink(file, file, magic=magic, adjust=adjust)
   else:
-    result = _shrink(file, name + "-new" + ext, magic=magic, adjust=adjust)
-    if result:
-      file = name + "-new" + ext
-    else:
+    output = name + "-new" + ext
+    result = _shrink(file, output, magic=magic, adjust=adjust)
+
+    if not os.path.exists(output):
       return result
 
-  _shrink(file, name + "-o" + ext, maxWidth=optimizeWidth, merge=False, magic=magic)
-  _shrink(
-    file, name + "-thumbnail" + ext, maxWidth=thumbnailWidth, merge=False, magic=magic
-  )
+  if not only:
+    _shrink(file, name + "-o" + ext, maxWidth=optimizeWidth, merge=False, magic=magic)
+    _shrink(
+      file, name + "-thumbnail" + ext, maxWidth=thumbnailWidth, merge=False, magic=magic
+    )
 
   return result
 
@@ -1050,6 +1052,12 @@ def main():
     "--override",
     action="store_true",
     help="override original file",
+    default=False,
+  )
+  parser.add_argument(
+    "--only",
+    action="store_true",
+    help="shrink without o (1080p), thumbnail (352p) file",
     default=False,
   )
   parser.add_argument(
@@ -1090,7 +1098,13 @@ def main():
 
       shrink = 0
       for f in files:
-        if shrinkFile(f, override=args.override, magic=args.magic, adjust=args.adjust):
+        if shrinkFile(
+          f,
+          override=args.override,
+          only=args.only,
+          magic=args.magic,
+          adjust=args.adjust,
+        ):
           shrink += 1
 
       result = {
@@ -1104,7 +1118,11 @@ def main():
     else:
       result = {
         "result": shrinkFile(
-          args.shrink, override=args.override, magic=args.magic, adjust=args.adjust
+          args.shrink,
+          override=args.override,
+          only=args.only,
+          magic=args.magic,
+          adjust=args.adjust,
         ),
         "override": args.override,
         "magic": args.magic,
@@ -1114,7 +1132,7 @@ def main():
   elif args.version:
     result = {"version": Consts.version, "magic": _check()}
   else:
-    print("usage: ex [-h] [-v] [-f FILE [-t FILE]] [[-o] [-m] -s FILE]")
+    print("usage: ex [-h] [-v] [-f FILE [-t FILE]] [[-o] [--only] [-m] -s FILE]")
     return
 
   print(json.dumps(result, indent=2))
